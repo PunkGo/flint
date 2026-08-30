@@ -118,8 +118,8 @@ Supporting verbs: `install` (suite); `pit` / `knowledge` / `memory` (capture →
 ### `AUTHORITY.toml` — the pointer-level source of truth
 
 The repo root carries an `AUTHORITY.toml` (the *authority-first* convention): a
-stateless manifest that binds which file answers for what — architecture,
-constitution, contributing, security, runbooks — plus the `[recovery]` read_order an agent follows on cold
+stateless manifest that binds which file answers for what — architecture, agent
+instructions, constitution, contributing, security, runbooks — plus the `[recovery]` read_order an agent follows on cold
 start or post-compaction. It points at where state lives and never carries state
 itself, so it cannot rot the way stateful "portal" documents did. Every pointer
 resolves from a fresh clone; machine-local state (harness memory) is declared,

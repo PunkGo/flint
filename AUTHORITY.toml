@@ -4,6 +4,7 @@
 
 [authority]
 architecture_file = "ARCHITECTURE.md"
+agent_instructions_file = "AGENTS.md"
 constitution_files = ["docs/whitepaper.md", "docs/PIP-0001-core-freeze.md"]
 contributing_file = "CONTRIBUTING.md"
 security_file = "SECURITY.md"
@@ -11,6 +12,7 @@ runbook_files = ["skills/flint-knowledge/SKILL.md", "skills/flint-status/SKILL.m
 
 [recovery]
 read_order = [
+  "AGENTS.md",
   "ARCHITECTURE.md",
   "docs/whitepaper.md",
   "docs/PIP-0001-core-freeze.md",
@@ -19,4 +21,4 @@ read_order = [
 
 [state]
 kind = "machine-local"
-note = "task state lives in per-machine harness memory; agent instructions arrive harness-injected (CLAUDE.md, gitignored) — neither is pointed because neither exists on a fresh clone"
+note = "task state lives in per-machine harness memory — not pointed because it does not exist on a fresh clone. AGENTS.md is the operate-flint manual; the owner's private session wiring (CLAUDE.md) stays machine-local and gitignored."

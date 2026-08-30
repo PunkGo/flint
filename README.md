@@ -85,49 +85,24 @@ engine and not a cloud service, and it will not become one.
 The constitution — the few invariants Flint will never let change — lives in
 [`docs/whitepaper.md`](docs/whitepaper.md).
 
-## Install
+## Setup
 
-Flint is a Rust workspace (`flint-core` + `flint-cli`, binary `flint`). Requires **Rust
-1.85+**. The compiled binary is native to one OS/arch — build it on each machine you use;
-your rule `.md` files are portable, the binary is not.
+The fastest path is to hand this repo to your agent — it carries
+[`AGENTS.md`](AGENTS.md), an install-and-operate manual written for agents, with one hard
+rule baked in: the agent prepares everything, **but the signature is yours** — it hands
+you the signing command verbatim and waits. Paste this to any coding agent:
 
-**1. Build.**
+> Clone https://github.com/PunkGo/flint, read AGENTS.md, and set Flint up on this
+> machine. Hand me the signing command when you reach it — signing is mine.
 
-```sh
-git clone https://github.com/PunkGo/flint && cd flint
-cargo build --release          # -> target/release/flint
-```
+Prefer to drive yourself? The same manual reads as a human runbook: every step is a
+command plus the check that proves it worked. Either way you need **Rust 1.85+**; the
+compiled binary is native to one OS/arch — build it on each machine you use. Your rule
+`.md` files are the portable part.
 
-**2. Initialize your flint home.** One command generates the sovereign signing key (Ed25519;
-the private key never leaves this box, `keys/` is `0700`, the key `0600`) and writes
-`flint.toml`. The canon starts **empty** on purpose: flint ships the mechanism, never the
-rules — rules are yours:
+### What a rule looks like
 
-```sh
-target/release/flint init                 # ~/.flint by default; --home <dir> to override
-```
-
-Add `--with-memory` to also wire an opt-in vault (point it at an existing Obsidian / wiki /
-notes folder, or let it scaffold one — see [Bring your own memory](#bring-your-own-memory)),
-or `--scope <name>` to namespace this instance against cross-instance replay.
-
-**3. Pick your laws.** [`examples/laws/`](examples/laws/) holds sample rules grown from real
-practice (secret-zero, lsp-over-grep, verify-before-claiming, …) — plain markdown, all
-`status: proposed`. Copy the ones you actually want, read them, then sign. Nothing bears
-weight until you accept it (`propose ≠ pick`, the sovereignty line):
-
-```sh
-cp examples/laws/secret-zero.md ~/.flint/canon/rules/
-flint law list   --config ~/.flint/flint.toml     # proposed vs accepted, at a glance
-flint law accept --all --config ~/.flint/flint.toml --key ~/.flint/keys/sovereign_ed25519
-```
-
-`accept --all` signs every proposed law in one pick; accept them one at a time with
-`--name <id>`. `flint law disable` / `remove` later turn an accepted law off (an auditable,
-re-signed record — never a silent vanish; a `remove` leaves a signed tombstone).
-
-**4. Author your own rules** — drop a markdown file under `~/.flint/canon/rules/`,
-then lint + pick to sign it in:
+Your canon is a folder of files like this — plain text you can read, diff, and carry:
 
 ```markdown
 ---
@@ -142,84 +117,10 @@ reversibility: irreversible
 Do not write into secrets/. Use a vault / Keychain pointer.
 ```
 
-```sh
-flint canon lint --config ~/.flint/flint.toml
-flint canon pick --config ~/.flint/flint.toml --key ~/.flint/keys/sovereign_ed25519
-```
-
-(`kind: command` matches a regex over a shell command instead; `kind: advisory` is a guideline
-compiled into agent context rather than a gate.)
-
-**5. Wire it into your agents.** `compile` prints the hook fragment to merge:
-
-```sh
-# Claude Code — merge the printed JSON into ~/.claude/settings.json
-flint compile --harness claude --config ~/.flint/flint.toml
-
-# Codex — prints ~/.codex/hooks.json wiring + the AGENTS.md advisory block
-flint compile --harness codex --config ~/.flint/flint.toml
-
-# Grok (xAI Grok Build) — prints the ~/.grok/hooks/flint.json wiring
-flint compile --harness grok --config ~/.flint/flint.toml
-```
-
-`compile --target-dir <dir>` also writes the advisory files (Claude `.claude/rules/`, Codex
-`AGENTS.md`) directly. That's it — the gate is live on your next agent session.
-
-Tip: put the binary on your `PATH` — e.g.
-`ln -s "$PWD/target/release/flint" /usr/local/bin/flint` (or copy it anywhere your shell
-finds it). The examples below assume `flint` resolves.
-
-## Suite bootstrap (workflow skills)
-
-Beyond the gate, Flint ships its workflow skills (`/flint-knowledge`, `/flint-status`)
-from a single source: `skills/` in this repo, declared in `scripts/manifest.toml`,
-installed by the binary itself — no interpreter involved.
-
-```sh
-# macOS / Linux / WSL
-scripts/bootstrap.sh                    # build + `flint install --stage skills`
-# with a private memory-instance repo (cloned + pointer written if absent):
-scripts/bootstrap.sh --instance git@github.com:you/your-memory.git
-```
-
-```powershell
-# Windows native
-scripts\bootstrap.ps1                   # same, PowerShell entrypoint
-scripts\bootstrap.ps1 -Instance git@github.com:you/your-memory.git
-```
-
-`--instance` is opt-in and one-time: it clones YOUR private memory repo (default
-`~/memory`, override with `--root`) and writes `~/.flint/instance.toml` so
-`$INSTANCE`-sourced manifest entries resolve. The URL is passed in — never baked
-into this repo. Without it the suite still installs; instance-sourced entries
-skip with a warning.
-
-Both are thin glue over the same three moves: `cargo build --release`, a signed-canon
-preflight (stage `full` only), then `flint install`. All semantics live in the binary:
-idempotent diff-writes, an `installed.lock` under `~/.flint` for honest removal,
-targets confined to `~/.claude` / `~/.codex` / `~/.flint`. Useful directly:
-
-```sh
-flint install --check      # drift report (hand-edited / missing / pending removal)
-flint install --plan       # dry run — prints what would change, writes nothing
-```
-
-`--stage full` (harness bindings rendered from your signed canon) is staged work —
-refuse-on-unsigned-canon is already enforced. On a machine that may run either WSL or
-native Windows, both entrypoints work against the same repo checkout; build natively in
-each runtime (the binary is per-OS, your `.md` rules and skills are portable).
-
-### Codex SessionStart suite sync
-
-`flint install --stage full` installs a manifest-owned `SessionStart` hook for
-`startup|resume`. The explicit install records the current Git `HEAD` in the hook
-command; SessionStart re-runs `flint install --quiet --stage full` only when the
-local Flint repository is clean, on `main`, and still at that approved commit. It
-does not pull Git, rebuild, upgrade the Flint binary, or adopt a newer commit.
-After first install—or after the repo moves to a commit you want to approve—run the
-non-quiet full install again, then review and trust the new hook hash with Codex
-`/hooks`.
+(`kind: command` matches a regex over a shell command; `kind: advisory` is a guideline
+compiled into agent context rather than a gate.) Sample rules grown from real practice
+live in [`examples/laws/`](examples/laws/) — copy, read, then sign: nothing bears weight
+until you accept it (`propose ≠ pick`, the sovereignty line).
 
 ## Using it day to day
 
