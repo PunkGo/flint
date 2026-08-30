@@ -13,6 +13,10 @@ harness-agnostic layer that keeps the rules you follow **explicit, portable, enf
 the moment of action, and revised only when you say so** — so your judgment stays with
 you, not with the tool.
 
+> **Setting it up with a coding agent?** Point it at [`SETUP.md`](SETUP.md) — the
+> install-and-operate manual written for agents. It prepares everything and hands back
+> the one command that stays yours: the signature. ([Setup](#setup))
+
 ## The four actions
 
 1. **Write it down.** The rules you follow become your own versioned plain text — not a
@@ -110,6 +114,7 @@ schema: flint/v1
 id: no-secrets-dir
 type: rule
 kind: path
+description: Never write into secrets/ — use a vault or a keychain pointer.
 glob: secrets/**
 response: block
 reversibility: irreversible
@@ -124,13 +129,14 @@ until you accept it (`propose ≠ pick`, the sovereignty line).
 
 ## Using it day to day
 
-- **Enforcement is automatic.** Once wired, every matching tool call is judged. You do
-  nothing.
+- **Enforcement is automatic.** Once wired, every matching tool call is judged — no
+  per-call ceremony. Hooks load at session start, so a fresh wiring takes effect in the
+  next session, and what each harness can actually enforce is the matrix below.
 - **A rule grows from practice.** Hit a wall, capture it, and when a note earns it, turn it
   into a rule — `flint canon pick` again to sign the change in.
 - **Capture walls, then refine them into knowledge.** While you work, walls and
   worth-keeping notes land as one-line gists — the agent marks them itself by default (the
-  `[capture] auto_mine` nudge; turn it off any time), or you run `flint pit mark "<gist>"`.
+  `[capture] auto_mine` nudge; turn it off any time), or you run `flint pit mark --config ~/.flint/flint.toml "<gist>"`.
   Later, triage the inbox: `flint knowledge review` shows what's pending across your ore
   stores, `flint knowledge promote` keeps a gist as a durable note (bare markdown you own),
   `flint knowledge toss` drops the noise. The `/flint-knowledge` skill walks the triage.
@@ -167,7 +173,8 @@ flint fleet list   --config ~/.flint/flint.toml
 flint fleet remove --config ~/.flint/flint.toml --label laptop
 ```
 
-Private keys never move — only public keys join the set.
+Private keys never move — only public keys join the set. Both `add` and `remove` change
+who can sign rules enforced here, so both are decisions worth making deliberately.
 
 ## What enforces where
 

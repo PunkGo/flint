@@ -53,7 +53,9 @@ Flint must hold:
   source. See [`docs/PIP-0001-core-freeze.md`](docs/PIP-0001-core-freeze.md).
 - **Nothing is auto-promoted.** A captured note is *knowledge*, never a rule —
   until a human writes a rule and signs it.
-- **Open-source boundary.** The repo ships source + whitepaper + PIPs + assets.
+- **Open-source boundary.** The repo ships source, the whitepaper + PIPs, the sample
+  laws in `examples/laws/`, the operating docs (README / SETUP / CONTRIBUTING /
+  SECURITY / CHANGELOG / AUTHORITY.toml), `scripts/`, `skills/`, CI and assets.
   Internal design docs and the owner's private memory instance stay private (see
   `.gitignore`).
 
@@ -71,11 +73,12 @@ Flint must hold:
 | Module | Responsibility |
 |---|---|
 | `canon.rs` | The signed rule source: frontmatter parse, sign/verify, epoch, the law lifecycle. |
-| `touchstone.rs` | **The judge.** Match a tool call against the active Canon → `Affirm` / `Warn` / `Critique` / `Deny`. Four verdicts, three `response:` tiers — `Affirm` is "no rule matched", which no rule can request. Only `Warn` lets the call proceed. |
+| `touchstone.rs` | **The judge.** Match a tool call against the active Canon → `Affirm` / `Warn` / `Critique` / `Deny`. Four verdicts, three `response:` tiers — `Affirm` is "no rule matched", which no rule can request. Of the three tiers a rule can ask for, only `warn` lets the call proceed. |
 | `trust.rs` | Ed25519 key custody, `allowed_signers`, the fleet keyring, the anti-rollback epoch floor. |
 | `verifier.rs` | Signature + chain verification. A malformed rule fails the whole set **closed** — never a silent half-apply. |
 | `config.rs` | `flint.toml` parsing and ore-store (粗矿厂) resolution. |
 | `harness.rs` | Per-harness hook-JSON shapes (Claude / Codex / Grok adapters). |
+| `striker.rs` | **The compiler.** Renders per-harness hook wiring and the advisory text each agent reads — action 2, "carry it across". |
 | `glob.rs` | Path-glob matching for `path` rules. |
 | `pit.rs` | The pit store: the raw-ore capture inbox (mark a wall hot, save a gist cold). |
 | `memory.rs` | The **bring-your-own-memory** port: an opt-in vault (scaffold / capture / list / orient / resolve). Memory is knowledge — never signed, judged, or injected. |
@@ -143,9 +146,10 @@ TOML, not prose.
   is per-OS (build on each machine); your `.md` rules and skills are portable.
 - **Tests:** the core `freeze_gate` plus CLI integration suites (`law_lifecycle`,
   `canon_hook`, `install_concurrency`, `knowledge_cli`, `rollback_floor`,
-  `init_custody`, `suite_gate`, `bootstrap_config`, `fleet_keyring`).
+  `init_custody`, `suite_gate`, `bootstrap_config`, `fleet_keyring`, `law_patterns` —
+  which pins the sample-law regexes straight from `examples/laws/`).
   `cargo test` + `clippy -D warnings`.
-- **Version** 0.1.3 (`flint --version` carries the build git hash, `+dirty` on uncommitted trees) · Rust 1.85+ · edition 2024 · MIT.
+- **Version** 0.1.3 (`flint --version` carries the build git hash, `+dirty` when the built source differs from that commit) · Rust 1.85+ · edition 2024 · MIT.
 
 ## Changing Flint without breaking it
 
@@ -155,8 +159,9 @@ TOML, not prose.
 - **Sign changes.** Nothing bears weight until it is picked with the sovereign key.
   The agent never signs — a human does.
 - Keep the judge small (a one-sitting read). No fifth action.
-- Respect the open-source boundary (`.gitignore`): source + whitepaper + PIPs +
-  assets ship; internal design docs stay in the private memory instance.
+- Respect the open-source boundary (`.gitignore`): source, whitepaper + PIPs, sample
+  laws, operating docs, scripts, skills and assets ship; internal design docs stay in
+  the private memory instance.
 
 ---
 

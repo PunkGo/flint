@@ -79,9 +79,10 @@ enum Commands {
         cmd: CanonCmd,
     },
     /// Law lifecycle (self-contained spec §2): the sovereign accepts / disables / removes
-    /// individual laws. A default law is PROPOSED at `flint init` (written, unsigned); `accept`
-    /// signs it with your key = the first real pick (propose≠pick). `disable` / `remove` turn
-    /// an accepted law off / tombstone it. Every mutation re-signs the Canon.
+    /// individual laws. A rule lands in the canon PROPOSED (written, unsigned — you author it,
+    /// or copy a sample from examples/laws/); `accept` signs it with your key = the first real
+    /// pick (propose≠pick). `disable` / `remove` turn an accepted law off / tombstone it.
+    /// Every mutation re-signs the Canon.
     Law {
         #[command(subcommand)]
         cmd: LawCmd,
@@ -159,10 +160,10 @@ enum Commands {
         #[command(subcommand)]
         cmd: KnowledgeCmd,
     },
-    /// Bootstrap a fresh flint home (spec §2): generate the sovereign signing key, write the
-    /// default law pack (8 Iron Laws + lsp-over-grep-sweep) as PROPOSED (unsigned), and write
-    /// flint.toml. Nothing bears weight until you `flint law accept` — init proposes, it never
-    /// decides for you.
+    /// Bootstrap a fresh flint home (spec §2): generate the sovereign signing key, write
+    /// flint.toml, and scaffold an EMPTY canon — flint ships the mechanism, never the rules.
+    /// Add rules yourself (or copy samples from examples/laws/); nothing bears weight until
+    /// you `flint law accept` — init proposes, it never decides for you.
     Init {
         /// The flint home (default ~/.flint).
         #[arg(long)]

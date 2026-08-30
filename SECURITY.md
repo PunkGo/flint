@@ -11,7 +11,9 @@ file and the code ever disagree, the code is the truth and the disagreement is a
   (`CANON.manifest` + sig). A malformed or tampered rule fails the whole set
   **closed** — the gate denies rather than judging with a partial rule set.
 - **Redaction.** Receipts record rule id + verdict + timestamp, never the raw
-  command. A gate that blocks a secret must not write that secret to disk.
+  command. A gate that blocks a secret must not write that secret to disk. The log is
+  append-only in how Flint writes it — it is an ordinary local file, not tamper-proof
+  storage, and anyone who can write your home directory can edit it.
 - **No smuggled content.** The binary ships **zero rule content** — `flint init`
   scaffolds an empty canon. Every rule in your canon is one you (or your agent) put
   there as `proposed` and you signed. The samples in `examples/laws/` are plain
@@ -33,6 +35,12 @@ file and the code ever disagree, the code is the truth and the disagreement is a
 - **A same-UID attacker.** The anti-rollback epoch floor is a weak tier by design:
   an agent running as your user can touch the same files you can. It is
   defense-in-depth against accidents, not a hard boundary against local malice.
+- **An agent that decides to sign.** "Only the human signs" is a **discipline, not a
+  technical control**: your agent runs as you, can read the `0600` key, and can invoke
+  `flint law accept` exactly as you would — Flint cannot tell which of you typed it. The
+  invariant is upheld by the agent-facing manual ([`SETUP.md`](SETUP.md)) and by you
+  noticing, not by a sandbox. What Flint does guarantee is that every signature is
+  *recorded* and every rule change is *visible* in files you can diff.
 - **Your own rules.** Flint enforces what you signed. It does not judge whether
   what you signed is wise.
 

@@ -30,9 +30,10 @@ declined regardless of code quality. The full versions live in
 ## Changing the example laws
 
 `examples/laws/` holds sample rules — plain markdown, never compiled into the
-binary, never endorsed by it. Two properties are test-enforced (`init.rs` unit
-tests): every sample must parse clean under the canon rule format, and every sample
-must carry `status: proposed` — a sample may never claim to already bear weight.
+binary, never endorsed by it. Three properties are test-enforced (`init.rs` unit
+tests): every sample parses clean under the canon rule format; every sample carries
+`status: proposed` — a sample may never claim to already bear weight; and no sample
+leaks a private pointer or an absolute home path.
 
 ## Scope of measurement claims
 
