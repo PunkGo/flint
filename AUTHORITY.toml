@@ -1,0 +1,22 @@
+# AUTHORITY.toml — pointer-level source of truth (authority-first convention).
+# Stateless: binds which file answers for what; carries no project state itself.
+# Every pointer must resolve from a fresh clone; machine-local state is declared, not pointed.
+
+[authority]
+architecture_file = "ARCHITECTURE.md"
+constitution_files = ["docs/whitepaper.md", "docs/PIP-0001-core-freeze.md"]
+contributing_file = "CONTRIBUTING.md"
+security_file = "SECURITY.md"
+runbook_files = ["skills/flint-knowledge/SKILL.md", "skills/flint-status/SKILL.md"]
+
+[recovery]
+read_order = [
+  "ARCHITECTURE.md",
+  "docs/whitepaper.md",
+  "docs/PIP-0001-core-freeze.md",
+  "CONTRIBUTING.md",
+]
+
+[state]
+kind = "machine-local"
+note = "task state lives in per-machine harness memory; agent instructions arrive harness-injected (CLAUDE.md, gitignored) — neither is pointed because neither exists on a fresh clone"

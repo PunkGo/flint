@@ -1,0 +1,22 @@
+[package]
+name = "flint-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Flint's judge face: the signed rule Canon, the Touchstone verdict engine, Ed25519 trust + fleet keyring, and the redacted receipt log — kept deliberately small (PIP-0001 freeze)"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+regex.workspace = true
+sha2.workspace = true
+toml.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

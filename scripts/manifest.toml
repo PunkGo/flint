@@ -1,0 +1,66 @@
+# flint suite manifest (plan v4.3 §2) — the single source for what `flint install`
+# puts where. Source paths resolve against the repo root (this file's parent dir's
+# parent); `$INSTANCE/` sources resolve against the private memory instance
+# (~/.flint/instance.toml `root`) and are skipped with a warning when no instance
+# pointer exists. Targets may only live under $CLAUDE_HOME / $CODEX_HOME /
+# $GROK_HOME / $FLINT_HOME (canonical allowlist, enforced at run time).
+#
+# stage = "skills": workflow skills (default install).
+# stage = "full":   harness bindings (generator/block/hook entries) — WP2 extends this.
+#                   Advisory generators render from the SIGNED canon; the grok-hooks
+#                   generator renders WIRING from --config alone (see its entry below).
+
+[[artifact]]
+stage = "skills"
+type = "file"
+source = "skills/flint-knowledge/SKILL.md"
+target = "$CLAUDE_HOME/skills/flint-knowledge/SKILL.md"
+
+[[artifact]]
+stage = "skills"
+type = "file"
+source = "skills/flint-status/SKILL.md"
+target = "$CLAUDE_HOME/skills/flint-status/SKILL.md"
+
+# ---- stage full: harness bindings ----
+# Advisory generators render from the SIGNED canon (in-process Striker calls, no
+# shell); the grok-hooks generator renders hook WIRING from --config (no canon read).
+
+[[artifact]]
+stage = "full"
+type = "generator"
+generator = "claude-advisory"
+target = "$CLAUDE_HOME/rules/flint-advisory.md"
+
+[[artifact]]
+stage = "full"
+type = "generator"
+generator = "codex-agents-block"
+target = "$CODEX_HOME/AGENTS.md"
+
+[[artifact]]
+stage = "full"
+type = "codex-hook"
+hook = "flint-session-sync"
+target = "$CODEX_HOME/hooks.json"
+event = "SessionStart"
+matcher = "startup|resume"
+timeout = 30
+
+[[artifact]]
+stage = "full"
+type = "file"
+source = "skills/flint-status/SKILL.md"
+target = "$CODEX_HOME/skills/flint-status/SKILL.md"
+
+# Grok WIRING, not canon content: this file only points Grok's PreToolUse at
+# `flint hook --harness grok` (the rules are read from the signed canon at run time),
+# so it renders from --config alone and needs no signed canon.
+[[artifact]]
+stage = "full"
+type = "generator"
+generator = "grok-hooks"
+target = "$GROK_HOME/hooks/flint.json"
+
+# Memory-instance ($INSTANCE) bindings removed 2026-08-20: the private memory
+# instance (etch) is retired; session-close and the etch map skill went with it.

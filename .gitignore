@@ -1,0 +1,30 @@
+# build / runtime
+/target
+/state
+.claude
+.gstack/
+/.worktrees/
+todo
+nul
+.DS_Store
+
+# private operating wiring — never ships to the open repo
+/CLAUDE.md
+/CLAUDE.local.md
+
+# internal design notes live in the owner's private notes, NOT here.
+# Only the whitepaper (constitution) and PIPs ship in the open-source repo.
+/ATLAS.md
+docs/*
+!docs/whitepaper.md
+!docs/PIP-*.md
+*-dossiers.md
+*-methodology.md
+*-threat-model.md
+
+# research/ holds internal design specs + audits (spec drafts, codex/autoplan
+# findings) — private working notes, never ships to the open repo.
+/research/
+
+# local generated reports (diagrams, audits) — working artifacts, not shipped
+/reports/

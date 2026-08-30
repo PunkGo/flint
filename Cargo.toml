@@ -1,0 +1,28 @@
+[workspace]
+members = ["crates/flint-core", "crates/flint-cli"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.3"
+edition = "2024"
+license = "MIT"
+authors = ["Felix <feijiu@punkgo.ai>"]
+repository = "https://github.com/PunkGo/flint"
+rust-version = "1.85"
+
+[workspace.dependencies]
+# internal
+flint-core = { path = "crates/flint-core" }
+# shared
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# linear-time (RE2-style, no catastrophic backtracking) — safe to match
+# agent-controlled command text against sovereign-written patterns (command gate).
+regex = "1"
+sha2 = "0.10"
+toml = "0.8"
+clap = { version = "4", features = ["derive"] }
+hex = "0.4"
+tempfile = "3"
