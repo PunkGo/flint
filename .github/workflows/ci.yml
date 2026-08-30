@@ -1,9 +1,35 @@
 name: CI
 
+# Doc-only changes skip CI. examples/laws/*.md are NOT ignored — tests read them
+# (sample-law lint guards in init.rs, include_str! in law_patterns).
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'ARCHITECTURE.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'CHANGELOG.md'
+      - 'AUTHORITY.toml'
+      - 'LICENSE'
+      - 'docs/**'
+      - 'assets/**'
+      - 'examples/laws/README.md'
   pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'ARCHITECTURE.md'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'CHANGELOG.md'
+      - 'AUTHORITY.toml'
+      - 'LICENSE'
+      - 'docs/**'
+      - 'assets/**'
+      - 'examples/laws/README.md'
 
 env:
   CARGO_TERM_COLOR: always
