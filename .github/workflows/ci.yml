@@ -7,7 +7,7 @@ on:
     branches: [main]
     paths-ignore:
       - 'README.md'
-      - 'AGENTS.md'
+      - 'SETUP.md'
       - 'ARCHITECTURE.md'
       - 'CONTRIBUTING.md'
       - 'SECURITY.md'
@@ -20,7 +20,7 @@ on:
   pull_request:
     paths-ignore:
       - 'README.md'
-      - 'AGENTS.md'
+      - 'SETUP.md'
       - 'ARCHITECTURE.md'
       - 'CONTRIBUTING.md'
       - 'SECURITY.md'

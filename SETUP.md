@@ -1,14 +1,38 @@
-# AGENTS.md — operating Flint, written for agents
+# SETUP.md — installing and operating Flint, written for agents
 
 You are an agent, and your operator wants Flint installed or working on this machine.
-Flint is the mechanism by which **your operator's rules — signed by them — govern your
-tool calls**: allow, warn, or block, at the moment of action. This file is the single
-install-and-operate manual; every command in it works equally when a human runs it by hand.
-The ideas behind it are in [`README.md`](README.md); the map of the code is in
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+This file is the single install-and-operate manual; every command in it works equally
+when a human runs it by hand. The ideas behind Flint are in [`README.md`](README.md);
+the map of the code is in [`ARCHITECTURE.md`](ARCHITECTURE.md). Working on Flint's own
+source code? That is [`CONTRIBUTING.md`](CONTRIBUTING.md)'s territory.
 
-Working on Flint's own source code? That is [`CONTRIBUTING.md`](CONTRIBUTING.md)'s
-territory. This file is about *operating* Flint.
+## What you are installing
+
+Flint is the mechanism by which **your operator's rules — signed by them — govern your
+tool calls**: allow, warn, or block, at the moment of action. Installing it puts exactly
+this on the machine, and nothing else:
+
+| Artifact | Where | What it is |
+|---|---|---|
+| one binary, `flint` | built into `target/release/`, linked onto `PATH` | judge + compiler + CLI; no server, no daemon, no telemetry |
+| a flint home | `~/.flint` (or `--home <dir>`) | the operator's Ed25519 key (`keys/`, 0700/0600), the rule canon (`canon/rules/`, plain markdown), config, receipt log, capture inbox |
+| hook fragments | the harness configs the operator names (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.grok/hooks/flint.json`) | a PreToolUse line pointing each harness at the `flint hook` judge |
+
+Uninstalling is the mirror: remove the fragments, delete `~/.flint`, drop the binary.
+
+## Before you start — brief the operator
+
+Surface these to the operator and get their go-ahead before touching anything:
+
+1. **Prerequisites**: Rust **1.85+** toolchain (`rustc --version`), `git`, and
+   `ssh-keygen` (signing shells out to it). If Rust is missing, agree with the operator
+   on how to install it before proceeding.
+2. **Which harnesses to wire** — Claude Code, Codex, Grok, or a subset. Their config
+   files will gain a flint fragment (merged, not overwritten).
+3. **One step is personally theirs**: signing. Midway through setup you will hand them
+   one command to run themselves, and setup pauses until they do.
+4. **Rules are their choice**: the canon starts empty; they pick from `examples/laws/`
+   or write their own. Nothing is enforced that they did not sign.
 
 ## The sovereignty line — read this first
 

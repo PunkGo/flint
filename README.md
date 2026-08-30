@@ -88,11 +88,11 @@ The constitution — the few invariants Flint will never let change — lives in
 ## Setup
 
 The fastest path is to hand this repo to your agent — it carries
-[`AGENTS.md`](AGENTS.md), an install-and-operate manual written for agents, with one hard
+[`SETUP.md`](SETUP.md), an install-and-operate manual written for agents, with one hard
 rule baked in: the agent prepares everything, **but the signature is yours** — it hands
 you the signing command verbatim and waits. Paste this to any coding agent:
 
-> Clone https://github.com/PunkGo/flint, read AGENTS.md, and set Flint up on this
+> Clone https://github.com/PunkGo/flint, read SETUP.md, and set Flint up on this
 > machine. Hand me the signing command when you reach it — signing is mine.
 
 Prefer to drive yourself? The same manual reads as a human runbook: every step is a

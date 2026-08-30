@@ -4,7 +4,7 @@
 
 [authority]
 architecture_file = "ARCHITECTURE.md"
-agent_instructions_file = "AGENTS.md"
+setup_manual_file = "SETUP.md"
 constitution_files = ["docs/whitepaper.md", "docs/PIP-0001-core-freeze.md"]
 contributing_file = "CONTRIBUTING.md"
 security_file = "SECURITY.md"
@@ -12,7 +12,7 @@ runbook_files = ["skills/flint-knowledge/SKILL.md", "skills/flint-status/SKILL.m
 
 [recovery]
 read_order = [
-  "AGENTS.md",
+  "SETUP.md",
   "ARCHITECTURE.md",
   "docs/whitepaper.md",
   "docs/PIP-0001-core-freeze.md",
@@ -21,4 +21,4 @@ read_order = [
 
 [state]
 kind = "machine-local"
-note = "task state lives in per-machine harness memory — not pointed because it does not exist on a fresh clone. AGENTS.md is the operate-flint manual; the owner's private session wiring (CLAUDE.md) stays machine-local and gitignored."
+note = "task state lives in per-machine harness memory — not pointed because it does not exist on a fresh clone. SETUP.md is the install-and-operate manual; the owner's private session wiring (CLAUDE.md) stays machine-local and gitignored."
