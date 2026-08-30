@@ -13,9 +13,16 @@ harness-agnostic layer that keeps the rules you follow **explicit, portable, enf
 the moment of action, and revised only when you say so** — so your judgment stays with
 you, not with the tool.
 
-> **Setting it up with a coding agent?** Point it at [`SETUP.md`](SETUP.md) — the
-> install-and-operate manual written for agents. It prepares everything and hands back
-> the one command that stays yours: the signature. ([Setup](#setup))
+**To install it, paste this to your coding agent** — Claude Code, Codex, Grok:
+
+```text
+Read https://github.com/PunkGo/flint/blob/main/SETUP.md and set Flint up on this
+machine. Follow it exactly. Stop at the signing step and hand me that command —
+signing is mine.
+```
+
+It clones, builds, wires your harnesses, and proves the gate really blocks a command.
+The one thing it will not do is sign: that command comes back to you.
 
 ## The four actions
 
@@ -91,18 +98,13 @@ The constitution — the few invariants Flint will never let change — lives in
 
 ## Setup
 
-The fastest path is to hand this repo to your agent — it carries
-[`SETUP.md`](SETUP.md), an install-and-operate manual written for agents, with one hard
-rule baked in: the agent prepares everything, **but the signature is yours** — it hands
-you the signing command verbatim and waits. Paste this to any coding agent:
+[`SETUP.md`](SETUP.md) is the whole procedure — install, wiring, day-to-day, uninstall.
+It is written for the agent doing the work (that is what the paste block above is), and
+it reads as a human runbook just as well: every step is a command plus the check that
+proves it worked, and the one step no agent may take is marked.
 
-> Clone https://github.com/PunkGo/flint, read SETUP.md, and set Flint up on this
-> machine. Hand me the signing command when you reach it — signing is mine.
-
-Prefer to drive yourself? The same manual reads as a human runbook: every step is a
-command plus the check that proves it worked. Either way you need **Rust 1.85+**; the
-compiled binary is native to one OS/arch — build it on each machine you use. Your rule
-`.md` files are the portable part.
+You need **Rust 1.85+**. The compiled binary is native to one OS/arch — build it on each
+machine you use; your rule `.md` files are the portable part.
 
 ### What a rule looks like
 
