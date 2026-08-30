@@ -227,13 +227,16 @@ fn run_with_input(method: &str, input: &[u8], threshold: &str, contract: bool) -
         .stderr(Stdio::null())
         .spawn()
         .with_context(|| format!("spawn discrimination method: {method}"))?;
-    // Write the whole input then drop stdin so the child sees EOF.
-    child
-        .stdin
-        .take()
-        .context("child stdin missing")?
-        .write_all(input)
-        .context("write discrimination input to stdin")?;
+    // Write the whole input then drop stdin so the child sees EOF. A method that exits
+    // without reading its stdin (e.g. `true`) closes the pipe mid-write — that is not a
+    // delivery failure, it is the method ignoring its input, which is exactly what the
+    // discrimination check exists to expose (whether the race resolves to EPIPE is
+    // platform timing: Linux loses it, macOS often wins it). Any other error is real.
+    if let Err(e) = child.stdin.take().context("child stdin missing")?.write_all(input) {
+        if e.kind() != std::io::ErrorKind::BrokenPipe {
+            return Err(e).context("write discrimination input to stdin");
+        }
+    }
     let output = child.wait_with_output().context("wait discrimination method")?;
     let exit_code = output.status.code().unwrap_or(-1);
     let supports = if contract {

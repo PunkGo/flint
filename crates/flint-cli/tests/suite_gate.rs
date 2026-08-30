@@ -853,8 +853,8 @@ target = "$CLAUDE_HOME/rules/flint-advisory.md"
         &cfg,
         format!(
             "flint_bin = \"flint\"\ncanon_root = \"{}\"\n[trust]\nallowed_signers = \"{}\"\nsigner_identity = \"s\"\nscope = \"i\"\n",
-            canon.display(),
-            sb.home.join(".flint/allowed_signers").display()
+            canon.display().to_string().replace('\\', "/"),
+            sb.home.join(".flint/allowed_signers").display().to_string().replace('\\', "/")
         ),
     )
     .unwrap();
@@ -899,8 +899,8 @@ fn grok_hooks_generator_writes_wiring_into_the_grok_home() {
         &cfg,
         format!(
             "flint_bin = \"/usr/local/bin/flint\"\ncanon_root = \"{}\"\n[trust]\nallowed_signers = \"{}\"\nsigner_identity = \"s\"\nscope = \"i\"\n",
-            canon.display(),
-            sb.home.join(".flint/allowed_signers").display()
+            canon.display().to_string().replace('\\', "/"),
+            sb.home.join(".flint/allowed_signers").display().to_string().replace('\\', "/")
         ),
     )
     .unwrap();
