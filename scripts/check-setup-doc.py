@@ -15,7 +15,10 @@ import re, subprocess, tempfile, os, shutil, json, sys, stat
 
 setup = open("SETUP.md").read()
 blocks = re.findall(r"```sh\n(.*?)```", setup, re.S)
-ctx  = next(b for b in blocks if "--target-dir" in b)
+ctx_block = next(b for b in blocks if "--target-dir" in b)
+# the doc says to run only the line for each harness the operator named, so a
+# codex-only fixture must run the codex line and nothing else.
+ctx = next(l for l in ctx_block.splitlines() if "--harness codex" in l)
 WIRE = os.path.abspath("scripts/wire-harness.sh")
 BIN = os.path.abspath("target/release/flint")
 fail = 0

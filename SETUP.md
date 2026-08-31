@@ -72,7 +72,7 @@ Every command below uses these. Resolve them once, from the operator's answers, 
 substitute them literally; do not assume `~/.flint` if they chose another home.
 
 ```sh
-REPO="$HOME/src/flint"          # where you cloned it
+REPO="$HOME/src/flint"          # where you cloned it; unset on a binary-only install
 FLINT_HOME="$HOME/.flint"       # `init --home` if the operator wants another
 CFG="$FLINT_HOME/flint.toml"    # written by init
 KEY="$FLINT_HOME/keys/sovereign_ed25519"
@@ -178,47 +178,65 @@ exists, not who typed the command; that part is the discipline above.
 a re-signed `CANON.manifest`. Use `law accept` for adopting a rule, `canon pick` after
 editing rule files.
 
-**5. Wire the harnesses.** `flint compile` prints wiring; merging it into configs that
-belong to other tools is what [`scripts/wire-harness.sh`](scripts/wire-harness.sh) does —
-once per harness the operator named, and nothing else:
+**5. Wire the harnesses.** `flint compile` prints the wiring; something has to merge it
+into config files that belong to other tools. **This is the contract that merge must
+satisfy** — it is the specification, not the script below. Satisfy it with whatever your
+environment gives you: bash, PowerShell, Python, or your own file edits.
+
+| The merge must | Because |
+|---|---|
+| compile into a temporary file first, and write the target only on success | redirecting onto the config truncates it before the command that fills it has run — a failed compile would destroy what it meant to update |
+| back the config up before writing, or not write at all | the operator's other tools live in that file |
+| validate the merged JSON **before** it replaces the live file | validating afterwards means you already broke it |
+| remove flint's own hook from **inside** an entry, keeping any other tool's hook that shares it | dropping the whole entry takes the neighbour with it |
+| find flint's hook by the marker `hook --harness`, not by a binary path | Grok's wiring quotes the path, so a substring like `flint hook` silently misses it |
+| keep one entry per matcher the harness needs — `*` for Claude, **`Bash` and `apply_patch` for Codex**, and Grok's own file, which is flint's alone | trimming Codex to a single entry silently ungates `apply_patch` |
+| preserve the file's permissions | writing a new file in place of a `0600` config hands it the umask default |
+| read the file back and confirm the wiring names **that** harness | a Claude fragment in Codex's file makes the adapter read the wrong wire format |
+
+If the operator cloned the repo and has bash, that whole contract is already implemented
+and tested — use it rather than reimplementing it:
 
 ```sh
-scripts/wire-harness.sh --config "$CFG" --check $HARNESSES   # dry run, writes nothing
-scripts/wire-harness.sh --config "$CFG" $HARNESSES
+"$REPO"/scripts/wire-harness.sh --config "$CFG" --check $HARNESSES   # dry run
+"$REPO"/scripts/wire-harness.sh --config "$CFG" $HARNESSES
 ```
 
-It backs up before writing or refuses to write; validates the merged result before it
-replaces anything live; keeps hooks belonging to other tools even when they share an entry
-with flint's; and reads the file back to confirm the wiring names that harness — and, for
-Codex, that both the `Bash` and `apply_patch` matchers are present. Any failure leaves the
-config untouched and exits non-zero. That logic used to live here as a shell block, where
-it could not be tested; it is code now, covered by `scripts/check-setup-doc.py`.
+On Windows, or after a binary-only install where there is no `scripts/` directory, do the
+merge yourself against the table above. `flint compile --harness <h> --config "$CFG"`
+gives you the fragment (for Codex it prints an `AGENTS.md` block after the JSON — take the
+first JSON value); the rest is reading, editing and writing one JSON file per harness,
+which you are better at than a shell script is.
 
-Then write the context files. This is **not** conditional on having signed
-`advisory`-kind rules: on Codex the same `AGENTS.md` block is where **`path` rules are
-governed** (they do not enforce through the hook there), so a Codex operator who signed
-only path rules and skipped this would have no path governance at all. It writes a marked
-block and leaves the rest of an existing file alone:
+Then write the context files — run only the line for each harness the operator named.
+This is **not** conditional on having signed `advisory`-kind rules: on Codex the same
+`AGENTS.md` block is where **`path` rules are governed** (they do not enforce through the
+hook there), so a Codex operator who signed only path rules and skipped this would have no
+path governance at all. It writes a marked block and leaves the rest of an existing file
+alone.
 
 ```sh
-for HARNESS in $HARNESSES; do
-  case "$HARNESS" in
-    claude) flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude" \
-              && test -s "$HOME/.claude/rules/flint-advisory.md" && echo "claude: advisory written" ;;
-    codex)  flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex" \
-              && grep -q 'flint' "$HOME/.codex/AGENTS.md" && echo "codex: AGENTS.md block written" ;;
-    grok)   echo "grok: no advisory surface for this harness — nothing to write" ;;
-  esac
-done
+# claude — writes <target-dir>/rules/flint-advisory.md
+flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude"
+
+# codex — writes flint's marked block into <target-dir>/AGENTS.md
+flint compile --harness codex --config "$CFG" --target-dir "$HOME/.codex"
+
+# grok — no advisory surface for this harness; nothing to write
 ```
 
-(Both `test`/`grep` lines are there because a compile that fails silently leaves the
-operator with wiring but no governance, and on Codex that is the path rules.)
+Confirm the file actually appeared, because a compile that fails quietly leaves the
+operator wired but ungoverned — and on Codex, "ungoverned" means their path rules:
+`$HOME/.claude/rules/flint-advisory.md` is non-empty, and `$HOME/.codex/AGENTS.md`
+contains flint's marked block.
 
-*Done when* `wire-harness.sh` exits zero for every named harness, and the context line
-printed for each of them. The script has already read the files back, so there is nothing
-left for you to eyeball — which is the point. None of it proves the harness *obeys*;
-step 6 is the only thing that does.
+*Done when*, for every harness the operator named — however you did the merge: the config
+parses as JSON; every `hook --harness` command in it names **that** harness; Codex's file
+carries both the `Bash` and `apply_patch` matchers; every hook that was there before and
+is not flint's is still there; a `.bak-` file sits beside it if the config existed; and
+the context line above printed. (`wire-harness.sh` checks all of this itself and exits
+non-zero otherwise — if you used it and it exited zero, this is already proven.) None of
+it shows the harness *obeys*. Step 6 is the only thing that does.
 
 **6. Live-fire proof — once per harness.** **receipt ≠ enforcement:** a receipt records
 Flint's judgment, not the harness's obedience. Enforcement is proven only by watching a
