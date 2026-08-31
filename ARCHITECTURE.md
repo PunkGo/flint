@@ -149,9 +149,11 @@ TOML, not prose.
   is per-OS (build on each machine); your `.md` rules and skills are portable.
 - **Tests:** the core `freeze_gate` plus CLI integration suites (`law_lifecycle`,
   `canon_hook`, `install_concurrency`, `knowledge_cli`, `rollback_floor`,
-  `init_custody`, `suite_gate`, `bootstrap_config`, `fleet_keyring`, `law_patterns` —
-  which pins the `lsp-over-grep` and `lsp-over-grep-sweep` sample regexes straight from
-  `examples/laws/`; the other samples are lint-checked, not behaviour-tested).
+  `init_custody`, `suite_gate`, `bootstrap_config`, `fleet_keyring`, plus two suites that
+  pin shipped sample regexes against the real `examples/laws/` bytes: `law_patterns`
+  (the `lsp-over-grep` family) and `secret_zero` (both directions — a cleartext
+  credential denies, an unexpanded `$VAR` does not). The remaining samples are
+  lint-checked, not behaviour-tested.
   `cargo test` + `clippy -D warnings`.
 - **Version** 0.1.3 (`flint --version` carries the build git hash, `+dirty` when the built source differs from that commit) · Rust 1.85+ · edition 2024 · MIT.
 

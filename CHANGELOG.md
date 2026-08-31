@@ -2,6 +2,12 @@
 
 ## 0.1.3 — 2026-08-30
 
+- The shipped `secret-zero` sample was a version behind the author's own copy and
+  carried a measured false positive: `postgres://user:$DB_PASS@host` — an unexpanded
+  shell variable, which is exactly the fix the rule's own message recommends — was
+  denied. Ported the fix (the password position may not start with `$`) and pinned both
+  directions in a new `secret_zero` test suite, so the only `response: block` sample now
+  has a behaviour contract rather than only a lint.
 - Install is now `cargo install` (from a clone, or straight from the git URL) instead of
   a hand-rolled `cargo build` plus a symlink into `/usr/local/bin` — cargo already
   solves placement on every platform. There is still no published release channel; the
