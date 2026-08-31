@@ -19,8 +19,8 @@ independent**: it rides commodity harness hooks, not a kernel.
 1. **Write it down.** Your rules become versioned plain-text markdown you own (the
    **Canon**), not a vendor's opaque memory.
 2. **Carry it across agents.** One Canon **compiles** into each harness's native
-   format (Claude Code session rules, Codex `AGENTS.md`). Judgment follows *you*,
-   not the tool.
+   format (Claude Code session rules, Codex `AGENTS.md`, Grok hook wiring). Judgment
+   follows *you*, not the tool.
 3. **Enforce at the moment of action.** When an agent is about to act, the
    applicable rules are judged at the spot — **allow / warn / block**, before the
    action lands.
@@ -55,7 +55,8 @@ Flint must hold:
   until a human writes a rule and signs it.
 - **Open-source boundary.** The repo ships source, the whitepaper + PIPs, the sample
   laws in `examples/laws/`, the operating docs (README / SETUP / CONTRIBUTING /
-  SECURITY / CHANGELOG / AUTHORITY.toml), `scripts/`, `skills/`, CI and assets.
+  SECURITY / CHANGELOG / AUTHORITY.toml / `docs/reference.md`), `scripts/`, `skills/`,
+  CI and assets.
   Internal design docs and the owner's private memory instance stay private (see
   `.gitignore`).
 
@@ -74,8 +75,8 @@ Flint must hold:
 |---|---|
 | `canon.rs` | The signed rule source: frontmatter parse, sign/verify, epoch, the law lifecycle. |
 | `touchstone.rs` | **The judge.** Match a tool call against the active Canon → `Affirm` / `Warn` / `Critique` / `Deny`. Four verdicts, three `response:` tiers — `Affirm` is "no rule matched", which no rule can request. Of the three tiers a rule can ask for, only `warn` lets the call proceed. |
-| `trust.rs` | Ed25519 key custody, `allowed_signers`, the fleet keyring, the anti-rollback epoch floor. |
-| `verifier.rs` | Signature + chain verification. A malformed rule fails the whole set **closed** — never a silent half-apply. |
+| `trust.rs` | **Whose signature counts.** Ed25519 signature verification (namespace-pinned), the `allowed_signers` trust set, the fleet keyring, the anti-rollback epoch floor. A malformed or unsigned rule fails the whole set **closed** — never a silent half-apply. Key *custody* (generation, `0600`, permission re-checks) is `flint-cli`'s `init.rs`. |
+| `verifier.rs` | Runs a rule's falsifier method and freezes the artifacts — **dormant ring**, serving `forge`; never consulted by a verdict. |
 | `config.rs` | `flint.toml` parsing and ore-store (粗矿厂) resolution. |
 | `harness.rs` | Per-harness hook-JSON shapes (Claude / Codex / Grok adapters). |
 | `striker.rs` | **The compiler.** Renders per-harness hook wiring and the advisory text each agent reads — action 2, "carry it across". |
@@ -83,7 +84,7 @@ Flint must hold:
 | `pit.rs` | The pit store: the raw-ore capture inbox (mark a wall hot, save a gist cold). |
 | `memory.rs` | The **bring-your-own-memory** port: an opt-in vault (scaffold / capture / list / orient / resolve). Memory is knowledge — never signed, judged, or injected. |
 | `obslog.rs` | The append-only, **redacted** receipt log — which rule fired, what verdict; the raw command is never written. |
-| `content_store.rs` | Content-addressed object store. |
+| `content_store.rs` | Content-addressed object store — **dormant ring**, used only by `verifier`. |
 | `budget.rs` | Energy-budget accounting (reads real measured tokens; Flint never fabricates them). |
 | `forge.rs` | Evidence-tier / load-bearing gate scaffold — a rule earns a `reproduced` tier by discriminating on a fixture. **Dormant outer ring, grandfathered & frozen by PIP-0001**: present, no new callers. |
 | `model_veto.rs` | Layer-2 cross-vendor model veto — *"polygraph, not judge."* **Veto-only by construction** (can never Affirm / Authorize / Deny, nor up- or down-grade a verdict), `NoopVeto` by default: a dormant outer ring. Its very shape encodes the red line while dormant — a model may never be the judge. |
@@ -94,7 +95,7 @@ Entry points: `main.rs` (dispatch); `hook.rs` + `codex_hook.rs` + `cross_vendor.
 — **the gate**: read a harness hook JSON on stdin, judge it against the signed
 Canon, write a redacted receipt, and enforce the verdict in `--mode block`;
 `install.rs` (suite install — idempotent diff-writes + `installed.lock` for honest
-removal, targets confined to `~/.claude` / `~/.codex` / `~/.flint`);
+removal, targets confined to `~/.claude` / `~/.codex` / `~/.grok` / `~/.flint`);
 `knowledge.rs` + `capture.rs` (the capture → refine loop); `init.rs` (bootstrap a
 flint home); `fleet.rs` (cross-machine trust set). Verbs like `canon` / `law` /
 `memory` / `pit` / `budget` / `compile` dispatch from here into `flint-core`.
@@ -109,14 +110,16 @@ pick / accept  you sign with your Ed25519 key: `canon pick` / `law accept`
    │
 compile        per-harness hook wiring + advisory        (action 2: carry across)
    │
-hook (gate)    at the moment of action: judge vs Canon → Affirm / Critique / Deny,
-   │           write a redacted receipt                     (action 3: enforce)
+hook (gate)    at the moment of action: judge vs Canon → Affirm / Warn / Critique /
+   │           Deny (or an audited Exempt), write a redacted receipt
+   │                                                       (action 3: enforce)
 revise         edit the .md + re-sign — never silent, never by the model (action 4)
 ```
 
 Supporting verbs: `install` (suite); `pit` / `knowledge` / `memory` (capture →
 `knowledge review` → `promote`; nothing auto-promoted); `key` / `fleet`
-(custody, cross-machine trust); `budget`.
+(custody, cross-machine trust); `budget`; and `forge` — a shipped verb of the
+dormant ring, kept working but gaining no new capability.
 
 ### `AUTHORITY.toml` — the pointer-level source of truth
 
@@ -147,7 +150,8 @@ TOML, not prose.
 - **Tests:** the core `freeze_gate` plus CLI integration suites (`law_lifecycle`,
   `canon_hook`, `install_concurrency`, `knowledge_cli`, `rollback_floor`,
   `init_custody`, `suite_gate`, `bootstrap_config`, `fleet_keyring`, `law_patterns` —
-  which pins the sample-law regexes straight from `examples/laws/`).
+  which pins the `lsp-over-grep` and `lsp-over-grep-sweep` sample regexes straight from
+  `examples/laws/`; the other samples are lint-checked, not behaviour-tested).
   `cargo test` + `clippy -D warnings`.
 - **Version** 0.1.3 (`flint --version` carries the build git hash, `+dirty` when the built source differs from that commit) · Rust 1.85+ · edition 2024 · MIT.
 

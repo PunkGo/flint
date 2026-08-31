@@ -63,4 +63,4 @@ generator = "grok-hooks"
 target = "$GROK_HOME/hooks/flint.json"
 
 # Memory-instance ($INSTANCE) bindings removed 2026-08-20: the private memory
-# instance (etch) is retired; session-close and the etch map skill went with it.
+# instance they pointed at is retired, and the skills bound to it went with it.

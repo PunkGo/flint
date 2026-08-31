@@ -23,9 +23,10 @@ construction round grew exactly these organs and had to be cut back.
    instance.toml`, plus the bucket path form `maps/` (the bare word `maps` is everyday
    Rust/English and stays legal).
 2. The hook entrypoints (`flint-cli/src/hook.rs`, `cross_vendor.rs`) must never
-   reference `instance.toml` — the judge/hook path must not know that file exists. The
-   installer (`flint-cli` install path) legally reads it: carrying artifacts over is the
-   "take it with you" action, not judgment.
+   reference `instance.toml` — the judge/hook path must not know that file exists. Those
+   two files are the only part of `flint-cli` the gate scans; the rest of that crate is
+   deliberately out of scope, and the installer reads `instance.toml` there legally —
+   carrying artifacts over is the "take it with you" action, not judgment.
 3. The dormant outer ring (`forge.rs` and its `promote` API) predates this gate and is
    grandfathered **as-is**. It stays frozen: no new callers, no new capability. Removing
    it is a separate deliberate surgery, out of this gate's scope.

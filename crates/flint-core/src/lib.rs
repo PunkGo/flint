@@ -1,16 +1,18 @@
-//! Flint core — the judge layer (kernel-agnostic; no `punkgo-kernel`/`tokio` dep).
+//! Flint core — the judge layer: the signed rule Canon, the verdict engine, the trust
+//! set, and the redacted receipt log. Kernel-agnostic and dependency-light (no async
+//! runtime, no daemon) — it rides commodity harness hooks rather than owning a process.
 //!
-//! The PROJECTOR (`projector`, `registry`, `merkle`, `claim`, `eval_threshold`)
-//! is a deterministic PURE function of the kernel log — that purity is spec §13.1
-//! ("recomputable on any machine") and is what `flint check` relies on.
+//! The enforcement path is deliberately small, and PIP-0001 freezes it against growth
+//! toward a memory system: [`canon`] parses and validates the signed rule set, [`trust`]
+//! decides whose signature counts, [`touchstone`] judges one action against the active
+//! rules, [`striker`] compiles those rules out to each harness, and [`obslog`] writes the
+//! redacted receipt. [`harness`], [`glob`] and [`config`] serve that path;
+//! [`pit`] and [`memory`] are the capture side, which is knowledge and never judged.
 //!
-//! NOTE (codex P2-R2-1, honest scoping): the crate ALSO contains IO helpers —
-//! `verifier` (shell-executes methods) and `content_store` (filesystem CAS). They
-//! are NOT pure, and the projector's TRUST decision never calls them; they only
-//! run methods / freeze artifacts for propose/verify/check. So "pure function of
-//! the kernel log" describes the PROJECTOR, not the whole crate. The ledger
-//! backend coupling lives in `flint-kernel`.
-
+//! Four modules are a dormant outer ring, present but gaining no callers: [`forge`]
+//! (evidence tiers), [`verifier`] (shell-runs a rule\'s falsifier method), [`content_store`]
+//! (a filesystem CAS serving it), and [`model_veto`] (veto-only by construction — a model
+//! may never be the judge). They perform IO; no verdict consults them.
 pub mod budget;
 pub mod canon;
 pub mod config;

@@ -25,21 +25,34 @@ should not reconstruct *what command*. Don't call this "explainability".
   itself is a finding (gate not recording = check hooks).
 - Window: `$ARGUMENTS` days if given, else 7. Receipts carry unix-seconds `ts`.
 - Receipt schema (`flint-receipt-v1`, one JSON object per line):
-  `{"harness","rule_id","scopes":[],"tool_kind","ts","verdict"}` — `rule_id` is null on
-  affirm, the rule's id on critique/deny.
+  `{"schema","ts","harness","tool_kind","scopes":[],"context","verdict","rule_id","energy"}`.
+  `rule_id` is null on `affirm` and carries the rule's id on `warn` / `critique` / `deny`
+  (and on `exempt`, naming the rule that was bypassed). `context` is empty for
+  command-shaped actions — that is the redaction — and otherwise holds up to 200
+  characters of caller context, so do not describe the log as content-free in general.
+- Verdict tags, all five: `affirm` (no rule matched) · `warn` (proceeded, with context) ·
+  `critique` (blocked, recovery path) · `deny` (blocked, hard freeze) · `exempt` (a rule's
+  declared escape hatch fired and was recorded). A summary that drops `warn` or `exempt`
+  hides exactly the two things worth watching: the rules that only ever advise, and the
+  bypasses becoming a habit.
 
 ## Steps
 
 1. **Aggregate** over the window (use whatever tool the environment has — jq, python3,
    awk all work; do NOT require one specific tool):
-   - total receipts, and per-verdict counts: affirm / critique / deny;
+   - total receipts, and per-verdict counts across all five tags: affirm / warn /
+     critique / deny / exempt (they must sum to the total — if they do not, say so rather
+     than papering over it);
    - per-harness counts (claude / codex / grok) — any harness at zero while the others
      flow is a wiring smell (hook not trusted / not installed), surface it;
-   - per-rule counts for critique + deny (which rule is actually governing).
+   - per-rule counts for warn + critique + deny + exempt (which rule is actually
+     governing, and which one is mostly being waved through).
 2. **Recent enforcement detail**: the last 10 critique/deny receipts as a short table —
-   local time, harness, rule_id, verdict. No content column exists; don't fake one.
+   local time, harness, rule_id, verdict. There is no command column — command text is
+   never recorded — so do not invent one; `scopes` / `context` are all you have.
 3. **Report** one compact block:
-   - headline: `N receipts / X% affirm / Y critique / Z deny (last D days)`;
+   - headline: `N receipts (last D days) — A affirm / W warn / C critique / D deny /
+     E exempt`;
    - rule breakdown with counts;
    - harness split;
    - the recent-detail table;

@@ -61,6 +61,21 @@ enforced across all of them. Flint is a **local, personal** tool: one binary, pl
 under `~/.flint`, no server, no daemon, no telemetry, no account. It is not a team policy
 engine and not a cloud service, and it will not become one.
 
+## Why not just put the rules in `CLAUDE.md`?
+
+Because a rules file is *context*, and context is advice. The model reads it, complies
+while it is convenient, and drifts as the session fills — and nothing anywhere checks.
+You find out afterwards, if at all.
+
+Flint keeps that layer (its `advisory` tier compiles into exactly those files, one source
+across every agent instead of three copies drifting apart) and adds the two things advice
+cannot do: a **verdict at the moment of action** — the call is judged before it lands, not
+regretted after — and a **receipt** saying which of your rules acted.
+
+For most of what you want an agent to do, advice is enough. The gate is for the handful
+of rules where *"the model usually complies"* is not good enough: the secret that must not
+be written, the command that must not run in this repo. Those are worth signing.
+
 ## Design in one breath
 
 - **Signed rule source (Canon).** Your rules are markdown files with a small, strict

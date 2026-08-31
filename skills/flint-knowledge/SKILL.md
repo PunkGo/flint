@@ -3,7 +3,7 @@ name: flint-knowledge
 description: Triage flint's raw-ore inbox into durable knowledge — review the pending gists captured across your ore stores, then promote the keepers into 精矿 notes, toss the noise, defer the rest. A thin wrapper over the `flint knowledge` verbs; promotion is always the owner's call, never automatic. Use when the user says /flint-knowledge, "triage my pits", "review my gists", "升维", "promote a pit", "clear the flint inbox".
 disable-model-invocation: true
 argument-hint: "[optional: a keyword to focus the review]"
-allowed-tools: Bash(~/.flint/bin/flint knowledge *), Bash(flint knowledge *), Read
+allowed-tools: Bash(flint knowledge *), Read
 ---
 
 # /flint-knowledge — triage the raw-ore inbox into durable knowledge

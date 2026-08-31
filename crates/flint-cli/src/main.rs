@@ -115,7 +115,7 @@ enum Commands {
     /// Install the flint suite from a manifest (skills, generated advisory, marked
     /// blocks) — Striker's "carry it over" action for the whole suite. Idempotent
     /// diff-writes, installed.lock for honest removal, targets confined to
-    /// ~/.claude, ~/.codex, ~/.flint. The judge/hook path never runs through here.
+    /// ~/.claude, ~/.codex, ~/.grok, ~/.flint. The judge/hook path never runs through here.
     Install {
         /// Path to the suite manifest. Defaults to scripts/manifest.toml (run from
         /// the flint repo root, as scripts/bootstrap.* does).

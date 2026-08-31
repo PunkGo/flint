@@ -10,17 +10,20 @@ file and the code ever disagree, the code is the truth and the disagreement is a
 - **Rule integrity.** Rules bear weight only under your Ed25519 signature
   (`CANON.manifest` + sig). A malformed or tampered rule fails the whole set
   **closed** — the gate denies rather than judging with a partial rule set.
-- **Redaction.** Receipts record rule id + verdict + timestamp, never the raw
-  command. A gate that blocks a secret must not write that secret to disk. The log is
-  append-only in how Flint writes it — it is an ordinary local file, not tamper-proof
-  storage, and anyone who can write your home directory can edit it.
+- **Redaction.** The raw command text is **never** written: a gate that blocks a secret
+  must not write that secret to disk. Be precise about the rest, because "redacted" does
+  not mean "empty" — a receipt carries the rule id, verdict, timestamp, harness, tool
+  kind, the target `scopes`, and for non-command actions up to 200 characters of caller
+  context. For a file write that means the path is on disk in your log. The log is
+  append-only in how Flint writes it — an ordinary local file, not tamper-proof storage,
+  editable by anyone who can write your home directory.
 - **No smuggled content.** The binary ships **zero rule content** — `flint init`
   scaffolds an empty canon. Every rule in your canon is one you (or your agent) put
   there as `proposed` and you signed. The samples in `examples/laws/` are plain
   repo files; their provenance is git itself.
-- **Install confinement.** `flint install` writes only inside `~/.claude`,
-  `~/.codex`, `~/.flint`, checked against a resolved-path allowlist (symlink escape
-  is tested), and records an `installed.lock` for honest removal.
+- **Install confinement.** `flint install` writes only inside `~/.claude`, `~/.codex`,
+  `~/.grok` and `~/.flint`, checked against a resolved-path allowlist (symlink escape is
+  tested), and records an `installed.lock` for honest removal.
 
 ## What Flint cannot defend (honest boundary)
 

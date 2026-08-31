@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/PunkGo/flint/blob/main/SECURITY.md
+    about: Please report privately by email — do not open a public issue.
