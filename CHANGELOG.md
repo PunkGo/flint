@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3 — 2026-08-30
+## 0.1.3 — 2026-08-31
 
 - The shipped `secret-zero` sample was a version behind the author's own copy and
   carried a measured false positive: `postgres://user:$DB_PASS@host` — an unexpanded
