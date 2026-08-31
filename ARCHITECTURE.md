@@ -145,7 +145,9 @@ TOML, not prose.
 | Grok enforcement (command + path) | **live** — macOS and Windows, live-sentinel verified (PreToolUse hook, `{"decision":"deny"}` envelope — Grok ignores `permissionDecision`, measured 2026-08-20 on 1.0.5; warn text measured-undelivered; Windows wiring uses the PowerShell call operator) |
 | Outer ring (`forge`, `model_veto`) | **dormant / frozen** — present, no new capability |
 
-- **Verified live** on macOS (Apple Silicon) and Windows (native + WSL). The binary
+- **Verified live** — the gate itself — on macOS (Apple Silicon) and Windows (native +
+  WSL), on the author's own machines. CI runs the suite on Linux, macOS and Windows; the
+  install path has been walked by hand only on macOS. The binary
   is per-OS (build on each machine); your `.md` rules and skills are portable.
 - **Tests:** the core `freeze_gate` plus CLI integration suites (`law_lifecycle`,
   `canon_hook`, `install_concurrency`, `knowledge_cli`, `rollback_floor`,

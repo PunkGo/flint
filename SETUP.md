@@ -147,6 +147,11 @@ table is [`docs/reference.md`](docs/reference.md). Two traps it names — an
 unrecognized key fails the whole canon closed, and an omitted `status:` counts as
 `accepted` — are the ones worth reading before you draft anything.
 
+Fewer is better on a first install. These samples are one person's rules and carry that
+person's taste; the operator has felt none of the walls they came from yet. Propose a
+small set they can judge — `secret-zero` is the usual first pick — and let them add more
+when a need shows up in their own work.
+
 *Done when* `law list` shows every chosen rule as `proposed` **and nothing else** —
 the canon directory must contain exactly what the operator agreed to, because the next
 step signs what is there, not what you remember proposing.

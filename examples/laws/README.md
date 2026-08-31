@@ -10,8 +10,16 @@ read it and sign it yourself.
 ```sh
 cp examples/laws/secret-zero.md ~/.flint/canon/rules/
 flint law list   --config ~/.flint/flint.toml
-flint law accept --all --config ~/.flint/flint.toml --key ~/.flint/keys/sovereign_ed25519
+flint law accept --name secret-zero --config ~/.flint/flint.toml --key ~/.flint/keys/sovereign_ed25519
 ```
+
+**Start with one.** These are one person's rules and they carry that person's taste:
+`lsp-over-grep` is loud if you do not work through an LSP, `stop-framing-loop` encodes a
+way of working. `secret-zero` is the usual first pick — least intrusive, most obviously
+worth it. Add others when you have felt the need yourself, because a rule you adopted
+because it came in the box is precisely the borrowed judgment Flint exists to prevent.
+(`accept --all` exists, and signs everything currently proposed — reach for it once you
+know that is what you want.)
 
 Writing your own? The complete field table is [`../../docs/reference.md`](../../docs/reference.md).
 

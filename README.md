@@ -122,6 +122,10 @@ You need **Rust 1.85+**. There is no published release channel yet — the git t
 distribution, and `cargo install` compiles it, which for a gate is the point: you run
 what you can read.
 
+It touches three things: a binary on your `PATH`, a `~/.flint` directory holding your key,
+your rules and your receipts, and one hook entry merged into the config of each agent you
+name — backed up first. Removing it is those three in reverse.
+
 ```sh
 cargo install --git https://github.com/PunkGo/flint flint-cli   # puts `flint` on PATH
 ```
@@ -236,8 +240,16 @@ The judge, the signed Canon, the law lifecycle (`init` → `law accept`), the co
 pit store, bring-your-own memory, and the fleet keyring run end to end. Claude Code enforcement (command + path + advisory) is live; Grok enforcement
 (command + path) is live on macOS and Windows; the Codex adapter is partial (command rules
 enforce; file-scope governance rides `AGENTS.md` advisory). See
-[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full status table. Part of the
-[PunkGo](https://punkgo.ai) family.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) for the full status table.
+
+**Maturity, plainly.** Flint has governed the author's own agents daily for months, on
+macOS and Windows. As of this first public release, nobody else has installed it. The code
+is tested on Linux, macOS and Windows in CI, but the install path has only been walked by
+hand on macOS. If you are trying it now you are early — and the most useful thing you can
+report back is the one thing a receipt cannot tell you: whether your harness actually
+refused to run the command.
+
+Part of the [PunkGo](https://punkgo.ai) family.
 
 ## License
 
