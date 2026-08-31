@@ -2,6 +2,10 @@
 
 ## 0.1.3 — 2026-08-30
 
+- Install is now `cargo install` (from a clone, or straight from the git URL) instead of
+  a hand-rolled `cargo build` plus a symlink into `/usr/local/bin` — cargo already
+  solves placement on every platform. There is still no published release channel; the
+  git tree is the distribution.
 - **Agent-first docs**: [`SETUP.md`](SETUP.md) is the install-and-operate manual written
   for the agent doing the setup — a setup-state block it fills in first, every step
   ending on a check, an executable idempotent hook-merge recipe, a read-only live-fire

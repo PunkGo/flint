@@ -2,7 +2,7 @@
 
 You are an agent, and your operator wants Flint installed or working on this machine.
 This file is the manual for that job. A human can follow it too, with one exception
-called out where it happens (step 7 must run inside an agent session).
+called out where it happens (step 6 must run inside an agent session).
 
 The ideas behind Flint are in [`README.md`](README.md); the map of the code is in
 [`ARCHITECTURE.md`](ARCHITECTURE.md). Working on Flint's own source? That is
@@ -22,7 +22,7 @@ this and only this outside the repo you cloned:
 | advisory text (optional) | `.claude/rules/flint-advisory.md`, a marked block in `~/.codex/AGENTS.md` | `advisory`-kind rules compiled into agent context — guidance, not a gate |
 
 Cloning and building also leave a source tree and a `target/` directory in the repo;
-the optional suite (step 8) adds `~/.flint/installed.lock`. Removal is
+the optional workflow-skills suite adds `~/.flint/installed.lock`. Removal is
 [Uninstall](#uninstall) below.
 
 ## Before you start — brief the operator
@@ -30,16 +30,16 @@ the optional suite (step 8) adds `~/.flint/installed.lock`. Removal is
 Get their go-ahead on all of this before touching anything:
 
 1. **Prerequisites** — Rust **1.85+** (`rustc --version`), `git`, `ssh-keygen`, and a
-   JSON tool for step 6 (`jq`, or you edit JSON yourself). If any is missing, agree how
+   JSON tool for step 5 (`jq`, or you edit JSON yourself). If any is missing, agree how
    to install it before proceeding; do not install a toolchain unasked.
 2. **Which harnesses to wire** — Claude Code, Codex, Grok, or a subset. Those config
    files gain a Flint entry; you back them up first.
-3. **One step is personally theirs** — signing (step 5). You will stop and hand them a
+3. **One step is personally theirs** — signing (step 4). You will stop and hand them a
    command. Setup does not continue until they have run it.
 4. **Rules are their choice** — the canon starts empty. They pick from `examples/laws/`
    or write their own. Nothing is ever enforced that they did not sign.
 5. **What is NOT part of a basic install** — say so, and only do these if asked: the
-   workflow-skills suite (step 8), a memory vault, fleet trust for a second machine.
+   workflow-skills suite, a memory vault, fleet trust for a second machine.
 6. **Is Flint already here?** Run `command -v flint` and `ls ~/.flint` first. If either
    exists, this is a re-install or an upgrade: report what you found and ask how to
    proceed rather than running `init` blind. (`init` is idempotent and never overwrites
@@ -75,7 +75,6 @@ REPO="$HOME/src/flint"          # where you cloned it
 FLINT_HOME="$HOME/.flint"       # `init --home` if the operator wants another
 CFG="$FLINT_HOME/flint.toml"    # written by init
 KEY="$FLINT_HOME/keys/sovereign_ed25519"
-BIN_DEST="/usr/local/bin/flint" # a directory on PATH you can write to
 HARNESSES="claude codex grok"   # only the ones the operator named
 ```
 
@@ -96,29 +95,30 @@ rustc --version && git --version && command -v ssh-keygen && command -v jq
 *Done when* the first two print versions and the last two print a path. (`ssh-keygen`
 has no portable `--version`; presence is the check.)
 
-**1. Build.**
+**1. Install the binary.** Both paths compile from source — that is deliberate for a
+tool like this: you run a gate you built yourself, from a tree you can read. `cargo
+install` handles placement, so there is no symlink or `sudo` to reason about: `flint`
+lands in `~/.cargo/bin`, which a Rust toolchain already puts on `PATH`.
+
+Full — what the rest of this manual assumes, because it needs the repo for the sample
+laws (and, if wanted, the suite manifest):
 
 ```sh
 git clone https://github.com/PunkGo/flint "$REPO" && cd "$REPO"
-cargo build --release
-./target/release/flint --version
+cargo install --path crates/flint-cli --locked
 ```
 
-*Done when* `--version` prints `flint <version> (<git-hash>)`.
-
-**2. Put it on PATH.** Pick a directory already on `PATH` that you can write to
-without `sudo` — `~/.local/bin` and `~/bin` are usual; `/usr/local/bin` often needs
-`sudo`, so ask before using it. On Windows, copy the `.exe` into a directory on `PATH`.
+Binary only — no samples, no suite; the operator writes their own rules:
 
 ```sh
-mkdir -p "$(dirname "$BIN_DEST")" && ln -sf "$REPO/target/release/flint" "$BIN_DEST"
-cd ~ && flint --version
+cargo install --git https://github.com/PunkGo/flint flint-cli --locked
 ```
 
-*Done when* `flint --version` resolves from a directory other than the repo. (A symlink
-means a later rebuild is picked up automatically; a copy must be re-copied.)
+*Done when* `flint --version` prints `flint <version> (<git-hash>)` from a directory
+other than the repo. Upgrading later is the same command with `--force`; there is no
+published release channel yet, so the git tree is the distribution.
 
-**3. Init.**
+**2. Init.**
 
 ```sh
 flint init --home "$FLINT_HOME"          # add --scope <name> only if agreed
@@ -131,7 +131,7 @@ It never overwrites an existing key or config.
 *Done when* the output line `canon ... (empty — rules are yours ...)` appears and
 `ls "$FLINT_HOME/canon/rules"` is empty.
 
-**4. Propose rules.** Read the frontmatter `description:` of each sample in
+**3. Propose rules.** Read the frontmatter `description:` of each sample in
 [`examples/laws/`](examples/laws/), present that list to the operator in their own
 terms, and copy **only** what they choose:
 
@@ -146,7 +146,7 @@ They may also want their own rule; the format is in `examples/laws/README.md`.
 the canon directory must contain exactly what the operator agreed to, because the next
 step signs what is there, not what you remember proposing.
 
-**5. Hand over the signature.** Read back the exact `proposed` ids from step 4 so the
+**4. Hand over the signature.** Read back the exact `proposed` ids from step 3 so the
 operator knows what they are signing, then give them the command and **wait**:
 
 ```sh
@@ -166,7 +166,7 @@ exists, not who typed the command; that part is the discipline above.
 a re-signed `CANON.manifest`. Use `law accept` for adopting a rule, `canon pick` after
 editing rule files.
 
-**6. Wire the harnesses.** `flint compile` **prints** wiring; it does not write harness
+**5. Wire the harnesses.** `flint compile` **prints** wiring; it does not write harness
 configs. Back up, merge, validate — per harness the operator named.
 
 Grok has its own file, so it is a plain write:
@@ -203,9 +203,9 @@ flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex"
 
 *Done when* each target parses as valid JSON, contains exactly one `flint hook` entry,
 and the backup file exists. That proves the file is well-formed and wired — not that
-the harness obeys it. Step 7 proves that.
+the harness obeys it. Step 6 proves that.
 
-**7. Live-fire proof.** **receipt ≠ enforcement:** a receipt records Flint's judgment,
+**6. Live-fire proof.** **receipt ≠ enforcement:** a receipt records Flint's judgment,
 not the harness's obedience. Enforcement is proven only by watching a command not run.
 
 This step must run inside a **new** agent session of the wired harness (hooks load at

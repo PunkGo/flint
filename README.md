@@ -103,7 +103,16 @@ It is written for the agent doing the work (that is what the paste block above i
 it reads as a human runbook just as well: every step is a command plus the check that
 proves it worked, and the one step no agent may take is marked.
 
-You need **Rust 1.85+**. The compiled binary is native to one OS/arch — build it on each
+You need **Rust 1.85+**. There is no published release channel yet — the git tree is the
+distribution, and `cargo install` compiles it, which for a gate is the point: you run
+what you can read.
+
+```sh
+cargo install --git https://github.com/PunkGo/flint flint-cli   # puts `flint` on PATH
+```
+
+That gets you the binary alone. Clone instead if you want the sample rules and the
+workflow skills with it. The binary is native to one OS/arch — install it on each
 machine you use; your rule `.md` files are the portable part.
 
 ### What a rule looks like
