@@ -19,7 +19,7 @@ this and only this outside the repo you cloned:
 | one binary, `flint` | wherever you put it on `PATH` | judge + compiler + CLI; no server, no daemon, no telemetry, no network calls |
 | a flint home | `~/.flint` by default | the operator's Ed25519 key (`keys/`, dir `0700`, key `0600`), the rule canon (`canon/rules/`, plain markdown), `flint.toml`, the receipt log, the capture inbox |
 | hook wiring | only the harness configs the operator names — `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.grok/hooks/flint.json` | a PreToolUse entry pointing that harness at the `flint hook` judge |
-| advisory text (optional) | `.claude/rules/flint-advisory.md`, a marked block in `~/.codex/AGENTS.md` | `advisory`-kind rules compiled into agent context — guidance, not a gate |
+| context files | `<target-dir>/rules/flint-advisory.md` for Claude, a marked block in `<target-dir>/AGENTS.md` for Codex — `$HOME/.claude` and `$HOME/.codex` for a machine-wide install | `advisory` rules as guidance, and on Codex the `path`-rule governance too, since those do not enforce through its hook |
 
 Cloning and building also leave a source tree and a `target/` directory in the repo;
 the optional workflow-skills suite adds `~/.flint/installed.lock`. Removal is
@@ -40,7 +40,8 @@ Get their go-ahead on all of this before touching anything:
    or write their own. Nothing is ever enforced that they did not sign.
 5. **What is NOT part of a basic install** — say so, and only do these if asked: the
    workflow-skills suite, a memory vault, fleet trust for a second machine.
-6. **Is Flint already here?** Run `command -v flint` and `ls ~/.flint` first. If either
+6. **Is Flint already here?** Run `command -v flint`, and list the home the operator
+   intends to use (`$FLINT_HOME`, not necessarily `~/.flint`) first. If either
    exists, this is a re-install or an upgrade: report what you found and ask how to
    proceed rather than running `init` blind. (`init` is idempotent and never overwrites
    an existing key or config — but the operator should know which case they are in.)
@@ -94,7 +95,8 @@ Each step ends on a check. Run the check; move on only when it holds.
 rustc --version && git --version && command -v ssh-keygen && command -v jq && command -v python3
 ```
 
-*Done when* the first two print versions and the rest print a path. (`ssh-keygen`
+*Done when* `rustc` prints **1.85 or newer** — read the number, do not just check that the
+command succeeded — `git` prints a version, and the last three print a path. (`ssh-keygen`
 has no portable `--version`; presence is the check.)
 
 **1. Install the binary.** Both paths compile from source — that is deliberate for a
@@ -176,91 +178,125 @@ exists, not who typed the command; that part is the discipline above.
 a re-signed `CANON.manifest`. Use `law accept` for adopting a rule, `canon pick` after
 editing rule files.
 
-**5. Wire the harnesses.** `flint compile` **prints** wiring; it does not write harness
-configs. Back up, merge, validate — per harness the operator named.
-
-Grok has its own file, so it is a plain write:
-
-```sh
-mkdir -p ~/.grok/hooks
-flint compile --harness grok --config "$CFG" | grep -v '^#' \
-  | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > ~/.grok/hooks/flint.json
-```
-
-Claude Code and Codex share a config with other tools, so merge instead of overwrite.
-Run this **once per harness the operator named**, setting `HARNESS` each time — the
-fragments are not interchangeable. Codex's carries two matchers (`Bash` and
-`apply_patch`) where Claude's carries one, and each names its own harness to the judge;
-pasting Claude's wiring into Codex's file leaves `apply_patch` ungated and the adapter
-reading the wrong wire format, with nothing to warn you. The merge is idempotent — it
-drops any previous Flint entry before adding the current one:
+**5. Wire the harnesses.** `flint compile` **prints** wiring; it never writes a harness
+config. The loop below is the whole step: it iterates `$HARNESSES` — the list the
+operator actually named in the setup state, not a fixed set — and for each one backs up,
+merges, and validates. The fragments are **not interchangeable**: Codex's carries two
+matchers (`Bash` and `apply_patch`) where Claude's carries one, and each names its own
+harness to the judge, so a Claude fragment in Codex's file leaves `apply_patch` ungated
+and the adapter reading the wrong wire format, silently.
 
 ```sh
-HARNESS=claude                                        # then repeat with: codex
-case "$HARNESS" in
-  claude) TARGET="$HOME/.claude/settings.json" ;;
-  codex)  TARGET="$HOME/.codex/hooks.json" ;;
-esac
-FRAG="$(mktemp)"
-# compile prints the wiring, and for codex an AGENTS.md advisory block after it — take
-# the first JSON value and ignore whatever follows.
-flint compile --harness "$HARNESS" --config "$CFG" | grep -v '^#' \
-  | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > "$FRAG"
-if [ -f "$TARGET" ]; then cp "$TARGET" "$TARGET.bak-$(date +%Y%m%d-%H%M%S)"; else mkdir -p "$(dirname "$TARGET")"; echo '{}' > "$TARGET"; fi
-jq --slurpfile frag "$FRAG" '
-  .hooks.PreToolUse = (
-    [ (.hooks.PreToolUse // [])[]
-      | select([ (.hooks // [])[].command ] | any(contains("flint hook")) | not) ]
-    + $frag[0].hooks.PreToolUse )
-' "$TARGET" > "$TARGET.new" && mv "$TARGET.new" "$TARGET"
-python3 -m json.tool "$TARGET" > /dev/null && echo "valid JSON"
+set -o pipefail        # a compile that fails mid-pipeline must not look like success
+
+for HARNESS in $HARNESSES; do
+  case "$HARNESS" in
+    claude) TARGET="$HOME/.claude/settings.json" ;;
+    codex)  TARGET="$HOME/.codex/hooks.json" ;;
+    grok)   TARGET="$HOME/.grok/hooks/flint.json" ;;
+    *)      echo "unknown harness: $HARNESS" >&2; continue ;;
+  esac
+  mkdir -p "$(dirname "$TARGET")"
+  [ -f "$TARGET" ] && cp -p "$TARGET" "$TARGET.bak-$(date +%Y%m%d-%H%M%S)"
+
+  # compile into a temp file first: never redirect straight onto the operator's config,
+  # because the shell truncates the target before the command that fills it has run.
+  # For codex, compile prints an AGENTS.md block after the JSON — take the first JSON
+  # value and ignore what follows.
+  FRAG="$(mktemp)"
+  if ! flint compile --harness "$HARNESS" --config "$CFG" | grep -v '^#' \
+       | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > "$FRAG"; then
+    echo "compile failed for $HARNESS — config untouched" >&2; continue
+  fi
+
+  if [ "$HARNESS" = grok ]; then
+    cat "$FRAG" > "$TARGET"          # grok's hook file is flint's alone
+  else
+    [ -s "$TARGET" ] || echo '{}' > "$TARGET"
+    MERGED="$(mktemp)"
+    # Drop flint hooks from INSIDE each entry rather than dropping whole entries: another
+    # tool's hook can share an entry with flint's, and removing the entry removes theirs.
+    jq --slurpfile frag "$FRAG" '
+      .hooks.PreToolUse = (
+        [ (.hooks.PreToolUse // [])[]
+          | .hooks = [ (.hooks // [])[] | select(((.command // "") | contains("flint hook")) | not) ]
+          | select((.hooks | length) > 0) ]
+        + $frag[0].hooks.PreToolUse )
+    ' "$TARGET" > "$MERGED" || { echo "merge failed for $HARNESS — config untouched" >&2; continue; }
+    cat "$MERGED" > "$TARGET"        # write through the existing inode: keeps its permissions
+  fi
+
+  python3 -m json.tool "$TARGET" > /dev/null && echo "$HARNESS: wired, valid JSON"
+done
 ```
 
-If the operator signed any `advisory`-kind rules, also write the advisory text — this
-is what puts the guidance into agent context:
+Then write the context files. This is **not** conditional on having signed `advisory`-kind
+rules: on Codex the same `AGENTS.md` block is where **`path` rules are governed** (they do
+not enforce through the hook there), so a Codex operator who signed only path rules and
+skipped this step would have no path governance at all. It writes a marked block and
+leaves the rest of an existing file alone. Grok has no advisory surface, so a Grok-only
+install has nothing to write here:
 
 ```sh
-flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude"
-flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex"
+for HARNESS in $HARNESSES; do
+  case "$HARNESS" in
+    claude) flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude" ;;
+    codex)  flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex" ;;
+    grok)   echo "grok: advisory rules are not compiled for this harness" ;;
+  esac
+done
 ```
 
-*Done when* each target parses as valid JSON, its `flint hook` entries all name that
-harness (`--harness codex` in the Codex file, never `claude`), Codex's file carries both
-the `Bash` and `apply_patch` matchers, and the backup file exists. That proves the file is well-formed and wired — not that
-the harness obeys it. Step 6 proves that.
+*Done when*, **for every harness in `$HARNESSES`**: the target parses as valid JSON; every
+`flint hook` command in it names that same harness (`--harness codex` in Codex's file,
+never `claude`); Codex's file carries both the `Bash` and `apply_patch` matchers; any hook
+belonging to another tool is still present; and a `.bak-` file exists if the config did.
+That proves the file is well-formed and wired — not that the harness obeys it. Step 6 is
+the only thing that proves that.
 
-**6. Live-fire proof.** **receipt ≠ enforcement:** a receipt records Flint's judgment,
-not the harness's obedience. Enforcement is proven only by watching a command not run.
+**6. Live-fire proof — once per harness.** **receipt ≠ enforcement:** a receipt records
+Flint's judgment, not the harness's obedience. Enforcement is proven only by watching a
+command not run. Run this in a **new** session of *each* wired harness — hooks load at
+session start, so the session that installed them cannot test itself, and a pass on one
+harness says nothing about another. If you are the installing agent, hand this step to
+the operator with the probe pair written out.
 
-This step must run inside a **new** agent session of the wired harness (hooks load at
-session start, so the session that did the install cannot test itself). If you are the
-installing agent, hand the operator this step and have them start a fresh session.
-
-The probe must be **read-only by construction** — you are deliberately running a
-command that will execute if the gate is broken, so it must be harmless when it does.
-Never probe with a write, a delete, or anything touching real paths.
-
-With `lsp-over-grep` accepted (a `command` rule; its probe is a read-only search):
+Two properties make a probe worth running. It must be **harmless if it executes**, since
+a broken gate will execute it; and it must **print a marker when it executes**, or
+"nothing happened" is indistinguishable from "the command ran and had nothing to say".
+Pair every gated probe with a `printf` in the same command so the shell prints the marker
+if and only if the whole call got through:
 
 ```sh
-printf 'CONTROL_OK\n'                    # control: matches no rule — must print
-grep -n TODO src/main.rs                 # gated: matches the rule — must NOT run
+printf 'CONTROL_OK\n'                                    # matches no rule — must print
+
+# gated: pick the form matching a rule the operator actually signed.
+# secret-zero (the usual first pick) — the rule matches the TEXT, so echoing is enough:
+printf 'postgres://user:notarealpassword@localhost/db\n'; printf 'GATED_PROBE_RAN\n'
+
+# lsp-over-grep, if that was signed instead:
+grep -rn PROBE src/main.rs; printf 'GATED_PROBE_RAN\n'
 ```
 
-For a different rule, build the probe the same way: the shortest read-only command that
-its `pattern` matches. Expected outcome per rule kind and harness:
+*Done when*, in each wired harness: `CONTROL_OK` printed, `GATED_PROBE_RAN` did **not**,
+and the rule's own reason text came back as the block message. If `CONTROL_OK` never
+printed, the session or shell is broken and this run proves nothing — fix that before
+concluding anything.
 
-| Rule kind | Claude Code | Codex | Grok |
-|---|---|---|---|
-| `command` | blocks, reason delivered | blocks, reason delivered | blocks, reason delivered |
-| `path` | blocks | **SKIP — advisory only, will not block** | blocks (`write` / `search_replace`) |
-| `advisory` | **SKIP — guidance, never a gate** | **SKIP** | **SKIP — not compiled for Grok** |
+Two cases need a different reading, and neither is a failure:
 
-*Done when* `CONTROL_OK` printed, the gated probe did **not** run, and the rule's reason
-text came back as the block message. A `warn`-tier rule proceeds by design (and on Grok
-its text is measured-undelivered) — do not read either as a failure. If the control
-probe did not print, the session or shell is broken and this run proves nothing: fix
-that before drawing any conclusion.
+- **A `warn`-tier rule proceeds by design.** `GATED_PROBE_RAN` *will* print. What you are
+  checking is that the rule's text reached you as context (and on Grok, that text is
+  measured-undelivered — the receipt is the only evidence there).
+- **A `path` rule cannot be probed read-only**, because it is a write that triggers it.
+  Probe it in a throwaway directory with a disposable filename inside the glob
+  (`secrets/flint-probe.tmp`, say). If the gate holds, the file does not exist afterwards;
+  if it does exist, that file *is* the finding. Delete it either way. On Codex, skip this
+  — path rules ride advisory there and will not block, which is expected, not a fault.
+
+If a harness has no signed rule whose kind it can enforce (a Codex install carrying only
+`path` rules, a Grok install carrying only `advisory` ones), say so plainly instead of
+declaring the install proven: nothing was demonstrated for that harness.
 
 ## Working under Flint
 
@@ -336,8 +372,9 @@ flint install --plan                   # dry run, writes nothing
 ```
 
 Run `flint install` from the repo root — the manifest paths are relative. It writes only
-inside `~/.claude` / `~/.codex` / `~/.flint`, and records `~/.flint/installed.lock` so
-removal is honest. `--stage full` additionally renders harness bindings from the signed
+inside `~/.claude` / `~/.codex` / `~/.grok` / `~/.flint`, and records
+`~/.flint/installed.lock` so removal is honest. The workflow skills themselves install for
+Claude Code and Codex; a Grok-only operator gets the gate, not the skills. `--stage full` additionally renders harness bindings from the signed
 canon and installs a Codex `SessionStart` hook pinned to the repo's current Git `HEAD`:
 that quiet auto-sync re-runs only while the repo is clean, on `main`, and still at the
 approved commit — it never pulls, rebuilds, or adopts a newer commit. After the repo
@@ -354,8 +391,8 @@ There is no `flint uninstall` verb — removal is three explicit moves, each aud
    plus the advisory files if written. Suite artifacts are listed in
    `~/.flint/installed.lock`; dropping an entry from the manifest and re-running
    `flint install` removes that artifact for you.
-2. Delete the flint home (`~/.flint`). **This destroys the operator's signing key and
-   their receipt log — irreversible. Offer to copy `canon/rules/` out first: those are
+2. Delete the flint home (`$FLINT_HOME` — `~/.flint` only if that is what they chose).
+   **This destroys the operator's signing key and their receipt log — irreversible. Offer to copy `canon/rules/` out first: those are
    their rules, in portable plain text that outlives Flint.**
 3. Remove the binary from `PATH`, and the cloned repo if they want it gone.
 
@@ -370,5 +407,7 @@ There is no `flint uninstall` verb — removal is three explicit moves, each aud
   `AGENTS.md` advisory there. See the
   [enforcement matrix](README.md#what-enforces-where).
 - **The hook does not fire at all** → hooks load at session start; a config merged
-  mid-session takes effect in the next one. Check the target file parses and holds
-  exactly one `flint hook` entry.
+  mid-session takes effect in the next one. Check the target file parses, and holds one
+  `flint hook` command per matcher its harness needs — one for Claude and Grok, **two for
+  Codex** (`Bash` and `apply_patch`). Trimming Codex down to a single entry is how you
+  silently ungate `apply_patch`.

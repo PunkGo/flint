@@ -10,6 +10,18 @@ cargo clippy --workspace --all-targets -- -D warnings   # CI treats warnings as 
 
 Rust 1.85+, edition 2024. All three commands must be green before a PR.
 
+If you touch [`SETUP.md`](SETUP.md), also run:
+
+```sh
+python3 scripts/check-setup-doc.py      # needs target/release/flint built
+```
+
+That manual is a program people run, so it is checked by extracting its shell blocks and
+executing them against adversarial fixtures — a Codex-only install, a config where another
+tool's hook shares an entry with flint's stale one, a compile that fails midway, and a Codex canon
+whose only governance is its `AGENTS.md` block. Every one of those is a defect that shipped
+in an earlier version of that document because it was reviewed by being read.
+
 ## The guardrails (read before changing anything)
 
 These are design invariants, not conventions — a PR that crosses one will be
