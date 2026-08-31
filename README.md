@@ -42,6 +42,10 @@ In plain words: **a folder of your rules, a thing that compiles them into each a
 gate that judges by your rules at the moment of action, and a receipt that shows you which
 rule fired.**
 
+A rules file — `CLAUDE.md`, `AGENTS.md`, `.cursorrules` — does the first two actions and
+stops there, because context is advice: read when convenient, drifting as the session
+fills, checked by nothing. Flint keeps that layer, and adds the two it cannot reach.
+
 ## What Flint does not do
 
 Flint does not decide *for* you, and it does not judge whether your rules are wise, correct,
@@ -60,21 +64,6 @@ One person running coding agents — Claude Code, Codex, Grok — who wants thei
 enforced across all of them. Flint is a **local, personal** tool: one binary, plain files
 under `~/.flint`, no server, no daemon, no telemetry, no account. It is not a team policy
 engine and not a cloud service, and it will not become one.
-
-## Why not just put the rules in `CLAUDE.md`?
-
-Because a rules file is *context*, and context is advice. The model reads it, complies
-while it is convenient, and drifts as the session fills — and nothing anywhere checks.
-You find out afterwards, if at all.
-
-Flint keeps that layer (its `advisory` tier compiles into exactly those files, one source
-across every agent instead of three copies drifting apart) and adds the two things advice
-cannot do: a **verdict at the moment of action** — the call is judged before it lands, not
-regretted after — and a **receipt** saying which of your rules acted.
-
-For most of what you want an agent to do, advice is enough. The gate is for the handful
-of rules where *"the model usually complies"* is not good enough: the secret that must not
-be written, the command that must not run in this repo. Those are worth signing.
 
 ## Design in one breath
 
@@ -214,6 +203,10 @@ who can sign rules enforced here, so both are decisions worth making deliberatel
 | `command` (regex over a shell command) | **block** (PreToolUse hook) | **block** (PreToolUse hook) | **block** (PreToolUse hook) |
 | `path` (glob over a write target) | **block** (PreToolUse hook) | advisory (`AGENTS.md`) — apply_patch enforcement is flaky | **block** (PreToolUse hook, `write`/`search_replace`) |
 | `advisory` (guidance into agent context) | `.claude/rules/flint-advisory.md` | `AGENTS.md` block | — (not compiled; Grok user rules are a prompt-layer surface) |
+
+Claude Code is the only harness where all three rule kinds enforce, which is why it is
+the worked example in [`SETUP.md`](SETUP.md) — coverage, not preference. Wire whichever of
+the three you actually use; the wiring differs per harness and is not interchangeable.
 
 On Claude Code and Codex both blocking tiers reach the agent through the hook's
 `permissionDecision` JSON, and a `warn` through `additionalContext`. Grok honours a different

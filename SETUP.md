@@ -30,7 +30,7 @@ the optional workflow-skills suite adds `~/.flint/installed.lock`. Removal is
 Get their go-ahead on all of this before touching anything:
 
 1. **Prerequisites** — Rust **1.85+** (`rustc --version`), `git`, `ssh-keygen`, and a
-   JSON tool for step 5 (`jq`, or you edit JSON yourself). If any is missing, agree how
+   JSON toolchain for step 5 (`jq` and `python3`). If any is missing, agree how
    to install it before proceeding; do not install a toolchain unasked.
 2. **Which harnesses to wire** — Claude Code, Codex, Grok, or a subset. Those config
    files gain a Flint entry; you back them up first.
@@ -91,10 +91,10 @@ Each step ends on a check. Run the check; move on only when it holds.
 **0. Preflight.**
 
 ```sh
-rustc --version && git --version && command -v ssh-keygen && command -v jq
+rustc --version && git --version && command -v ssh-keygen && command -v jq && command -v python3
 ```
 
-*Done when* the first two print versions and the last two print a path. (`ssh-keygen`
+*Done when* the first two print versions and the rest print a path. (`ssh-keygen`
 has no portable `--version`; presence is the check.)
 
 **1. Install the binary.** Both paths compile from source — that is deliberate for a
@@ -183,16 +183,29 @@ Grok has its own file, so it is a plain write:
 
 ```sh
 mkdir -p ~/.grok/hooks
-flint compile --harness grok --config "$CFG" | grep -v '^#' > ~/.grok/hooks/flint.json
+flint compile --harness grok --config "$CFG" | grep -v '^#' \
+  | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > ~/.grok/hooks/flint.json
 ```
 
 Claude Code and Codex share a config with other tools, so merge instead of overwrite.
-This is idempotent — it drops any previous Flint entry before adding the current one:
+Run this **once per harness the operator named**, setting `HARNESS` each time — the
+fragments are not interchangeable. Codex's carries two matchers (`Bash` and
+`apply_patch`) where Claude's carries one, and each names its own harness to the judge;
+pasting Claude's wiring into Codex's file leaves `apply_patch` ungated and the adapter
+reading the wrong wire format, with nothing to warn you. The merge is idempotent — it
+drops any previous Flint entry before adding the current one:
 
 ```sh
-TARGET="$HOME/.claude/settings.json"    # Codex: "$HOME/.codex/hooks.json"
+HARNESS=claude                                        # then repeat with: codex
+case "$HARNESS" in
+  claude) TARGET="$HOME/.claude/settings.json" ;;
+  codex)  TARGET="$HOME/.codex/hooks.json" ;;
+esac
 FRAG="$(mktemp)"
-flint compile --harness claude --config "$CFG" | grep -v '^#' > "$FRAG"
+# compile prints the wiring, and for codex an AGENTS.md advisory block after it — take
+# the first JSON value and ignore whatever follows.
+flint compile --harness "$HARNESS" --config "$CFG" | grep -v '^#' \
+  | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > "$FRAG"
 if [ -f "$TARGET" ]; then cp "$TARGET" "$TARGET.bak-$(date +%Y%m%d-%H%M%S)"; else mkdir -p "$(dirname "$TARGET")"; echo '{}' > "$TARGET"; fi
 jq --slurpfile frag "$FRAG" '
   .hooks.PreToolUse = (
@@ -211,8 +224,9 @@ flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude"
 flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex"
 ```
 
-*Done when* each target parses as valid JSON, contains exactly one `flint hook` entry,
-and the backup file exists. That proves the file is well-formed and wired — not that
+*Done when* each target parses as valid JSON, its `flint hook` entries all name that
+harness (`--harness codex` in the Codex file, never `claude`), Codex's file carries both
+the `Bash` and `apply_patch` matchers, and the backup file exists. That proves the file is well-formed and wired — not that
 the harness obeys it. Step 6 proves that.
 
 **6. Live-fire proof.** **receipt ≠ enforcement:** a receipt records Flint's judgment,
