@@ -16,7 +16,7 @@ this and only this outside the repo you cloned:
 
 | Artifact | Where | What it is |
 |---|---|---|
-| one binary, `flint` | wherever you put it on `PATH` | judge + compiler + CLI; no server, no daemon, no telemetry, no network calls |
+| one binary, `flint` | wherever you put it on `PATH` | judge + compiler + CLI; no server, no daemon, no telemetry. It makes no network calls when it runs — installing it, of course, clones and builds |
 | a flint home | `~/.flint` by default | the operator's Ed25519 key (`keys/`, dir `0700`, key `0600`), the rule canon (`canon/rules/`, plain markdown), `flint.toml`, the receipt log, the capture inbox |
 | hook wiring | only the harness configs the operator names — `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.grok/hooks/flint.json` | a PreToolUse entry pointing that harness at the `flint hook` judge |
 | context files | `<target-dir>/rules/flint-advisory.md` for Claude, a marked block in `<target-dir>/AGENTS.md` for Codex — `$HOME/.claude` and `$HOME/.codex` for a machine-wide install | `advisory` rules as guidance, and on Codex the `path`-rule governance too, since those do not enforce through its hook |
@@ -178,81 +178,47 @@ exists, not who typed the command; that part is the discipline above.
 a re-signed `CANON.manifest`. Use `law accept` for adopting a rule, `canon pick` after
 editing rule files.
 
-**5. Wire the harnesses.** `flint compile` **prints** wiring; it never writes a harness
-config. The loop below is the whole step: it iterates `$HARNESSES` — the list the
-operator actually named in the setup state, not a fixed set — and for each one backs up,
-merges, and validates. The fragments are **not interchangeable**: Codex's carries two
-matchers (`Bash` and `apply_patch`) where Claude's carries one, and each names its own
-harness to the judge, so a Claude fragment in Codex's file leaves `apply_patch` ungated
-and the adapter reading the wrong wire format, silently.
+**5. Wire the harnesses.** `flint compile` prints wiring; merging it into configs that
+belong to other tools is what [`scripts/wire-harness.sh`](scripts/wire-harness.sh) does —
+once per harness the operator named, and nothing else:
 
 ```sh
-set -o pipefail        # a compile that fails mid-pipeline must not look like success
-
-for HARNESS in $HARNESSES; do
-  case "$HARNESS" in
-    claude) TARGET="$HOME/.claude/settings.json" ;;
-    codex)  TARGET="$HOME/.codex/hooks.json" ;;
-    grok)   TARGET="$HOME/.grok/hooks/flint.json" ;;
-    *)      echo "unknown harness: $HARNESS" >&2; continue ;;
-  esac
-  mkdir -p "$(dirname "$TARGET")"
-  [ -f "$TARGET" ] && cp -p "$TARGET" "$TARGET.bak-$(date +%Y%m%d-%H%M%S)"
-
-  # compile into a temp file first: never redirect straight onto the operator's config,
-  # because the shell truncates the target before the command that fills it has run.
-  # For codex, compile prints an AGENTS.md block after the JSON — take the first JSON
-  # value and ignore what follows.
-  FRAG="$(mktemp)"
-  if ! flint compile --harness "$HARNESS" --config "$CFG" | grep -v '^#' \
-       | python3 -c 'import json,sys; print(json.dumps(json.JSONDecoder().raw_decode(sys.stdin.read().strip())[0], indent=2))' > "$FRAG"; then
-    echo "compile failed for $HARNESS — config untouched" >&2; continue
-  fi
-
-  if [ "$HARNESS" = grok ]; then
-    cat "$FRAG" > "$TARGET"          # grok's hook file is flint's alone
-  else
-    [ -s "$TARGET" ] || echo '{}' > "$TARGET"
-    MERGED="$(mktemp)"
-    # Drop flint hooks from INSIDE each entry rather than dropping whole entries: another
-    # tool's hook can share an entry with flint's, and removing the entry removes theirs.
-    jq --slurpfile frag "$FRAG" '
-      .hooks.PreToolUse = (
-        [ (.hooks.PreToolUse // [])[]
-          | .hooks = [ (.hooks // [])[] | select(((.command // "") | contains("flint hook")) | not) ]
-          | select((.hooks | length) > 0) ]
-        + $frag[0].hooks.PreToolUse )
-    ' "$TARGET" > "$MERGED" || { echo "merge failed for $HARNESS — config untouched" >&2; continue; }
-    cat "$MERGED" > "$TARGET"        # write through the existing inode: keeps its permissions
-  fi
-
-  python3 -m json.tool "$TARGET" > /dev/null && echo "$HARNESS: wired, valid JSON"
-done
+scripts/wire-harness.sh --config "$CFG" --check $HARNESSES   # dry run, writes nothing
+scripts/wire-harness.sh --config "$CFG" $HARNESSES
 ```
 
-Then write the context files. This is **not** conditional on having signed `advisory`-kind
-rules: on Codex the same `AGENTS.md` block is where **`path` rules are governed** (they do
-not enforce through the hook there), so a Codex operator who signed only path rules and
-skipped this step would have no path governance at all. It writes a marked block and
-leaves the rest of an existing file alone. Grok has no advisory surface, so a Grok-only
-install has nothing to write here:
+It backs up before writing or refuses to write; validates the merged result before it
+replaces anything live; keeps hooks belonging to other tools even when they share an entry
+with flint's; and reads the file back to confirm the wiring names that harness — and, for
+Codex, that both the `Bash` and `apply_patch` matchers are present. Any failure leaves the
+config untouched and exits non-zero. That logic used to live here as a shell block, where
+it could not be tested; it is code now, covered by `scripts/check-setup-doc.py`.
+
+Then write the context files. This is **not** conditional on having signed
+`advisory`-kind rules: on Codex the same `AGENTS.md` block is where **`path` rules are
+governed** (they do not enforce through the hook there), so a Codex operator who signed
+only path rules and skipped this would have no path governance at all. It writes a marked
+block and leaves the rest of an existing file alone:
 
 ```sh
 for HARNESS in $HARNESSES; do
   case "$HARNESS" in
-    claude) flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude" ;;
-    codex)  flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex" ;;
-    grok)   echo "grok: advisory rules are not compiled for this harness" ;;
+    claude) flint compile --harness claude --config "$CFG" --target-dir "$HOME/.claude" \
+              && test -s "$HOME/.claude/rules/flint-advisory.md" && echo "claude: advisory written" ;;
+    codex)  flint compile --harness codex  --config "$CFG" --target-dir "$HOME/.codex" \
+              && grep -q 'flint' "$HOME/.codex/AGENTS.md" && echo "codex: AGENTS.md block written" ;;
+    grok)   echo "grok: no advisory surface for this harness — nothing to write" ;;
   esac
 done
 ```
 
-*Done when*, **for every harness in `$HARNESSES`**: the target parses as valid JSON; every
-`flint hook` command in it names that same harness (`--harness codex` in Codex's file,
-never `claude`); Codex's file carries both the `Bash` and `apply_patch` matchers; any hook
-belonging to another tool is still present; and a `.bak-` file exists if the config did.
-That proves the file is well-formed and wired — not that the harness obeys it. Step 6 is
-the only thing that proves that.
+(Both `test`/`grep` lines are there because a compile that fails silently leaves the
+operator with wiring but no governance, and on Codex that is the path rules.)
+
+*Done when* `wire-harness.sh` exits zero for every named harness, and the context line
+printed for each of them. The script has already read the files back, so there is nothing
+left for you to eyeball — which is the point. None of it proves the harness *obeys*;
+step 6 is the only thing that does.
 
 **6. Live-fire proof — once per harness.** **receipt ≠ enforcement:** a receipt records
 Flint's judgment, not the harness's obedience. Enforcement is proven only by watching a
@@ -373,7 +339,7 @@ flint install --plan                   # dry run, writes nothing
 
 Run `flint install` from the repo root — the manifest paths are relative. It writes only
 inside `~/.claude` / `~/.codex` / `~/.grok` / `~/.flint`, and records
-`~/.flint/installed.lock` so removal is honest. The workflow skills themselves install for
+`$FLINT_HOME/installed.lock` so removal is honest. The workflow skills themselves install for
 Claude Code and Codex; a Grok-only operator gets the gate, not the skills. `--stage full` additionally renders harness bindings from the signed
 canon and installs a Codex `SessionStart` hook pinned to the repo's current Git `HEAD`:
 that quiet auto-sync re-runs only while the repo is clean, on `main`, and still at the
@@ -386,10 +352,13 @@ Codex `/hooks`.
 There is no `flint uninstall` verb — removal is three explicit moves, each auditable.
 **Step 2 is irreversible; get the operator's confirmation before it.**
 
-1. Remove the Flint entry from every harness config it was merged into
-   (`~/.claude/settings.json`, `~/.codex/hooks.json`, delete `~/.grok/hooks/flint.json`),
-   plus the advisory files if written. Suite artifacts are listed in
-   `~/.flint/installed.lock`; dropping an entry from the manifest and re-running
+1. Remove Flint's hook from every harness config it was merged into — the *hook*, not
+   the entry containing it, because another tool's hook may sit beside it (the same trap
+   the install path avoids). `~/.grok/hooks/flint.json` is flint's alone and can be
+   deleted outright. For context files: delete `~/.claude/rules/flint-advisory.md`, but in
+   `~/.codex/AGENTS.md` remove only flint's marked block — the rest of that file is the
+   operator's own instructions. Suite artifacts are listed in
+   `$FLINT_HOME/installed.lock`; dropping an entry from the manifest and re-running
    `flint install` removes that artifact for you.
 2. Delete the flint home (`$FLINT_HOME` — `~/.flint` only if that is what they chose).
    **This destroys the operator's signing key and their receipt log — irreversible. Offer to copy `canon/rules/` out first: those are

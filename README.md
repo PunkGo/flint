@@ -21,8 +21,9 @@ machine. Follow it exactly. Stop at the signing step and hand me that command �
 signing is mine.
 ```
 
-It clones, builds, wires your harnesses, and proves the gate really blocks a command.
-The one thing it will not do is sign: that command comes back to you.
+It clones, builds, wires the agents you name, and then tries to get one command blocked
+in front of you — the only proof that means anything. The one thing it will not do is
+sign: that command comes back to you.
 
 ## The four actions
 
@@ -112,8 +113,9 @@ distribution, and `cargo install` compiles it, which for a gate is the point: yo
 what you can read.
 
 It touches three things: a binary on your `PATH`, a `~/.flint` directory holding your key,
-your rules and your receipts, and one hook entry merged into the config of each agent you
-name — backed up first. Removing it is those three in reverse.
+your rules and your receipts, and flint's hook merged into the config of each agent you
+name — backed up first, and one entry per matcher that harness needs, which is two for
+Codex. Removing it is those three in reverse.
 
 ```sh
 cargo install --git https://github.com/PunkGo/flint flint-cli   # puts `flint` on PATH

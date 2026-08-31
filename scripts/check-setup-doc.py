@@ -15,7 +15,8 @@ import re, subprocess, tempfile, os, shutil, json, sys, stat
 
 setup = open("SETUP.md").read()
 blocks = re.findall(r"```sh\n(.*?)```", setup, re.S)
-loop = next(b for b in blocks if "for HARNESS in $HARNESSES" in b and "jq" in b)
+ctx  = next(b for b in blocks if "--target-dir" in b)
+WIRE = os.path.abspath("scripts/wire-harness.sh")
 BIN = os.path.abspath("target/release/flint")
 fail = 0
 
@@ -28,9 +29,8 @@ def fresh_home():
     return tmp, fake
 
 def run(fake, harnesses):
-    env = dict(os.environ, HOME=fake, PATH=f"{os.path.dirname(BIN)}:{os.environ['PATH']}",
-               HARNESSES=harnesses, CFG=f"{fake}/.flint/flint.toml")
-    return subprocess.run(["bash", "-c", 'HARNESSES="$HARNESSES"\nCFG="$CFG"\n' + loop],
+    env = dict(os.environ, HOME=fake, FLINT=BIN)
+    return subprocess.run(["bash", WIRE, "--config", f"{fake}/.flint/flint.toml", *harnesses.split()],
                           capture_output=True, text=True, env=env)
 
 def check(label, cond, detail=""):
@@ -77,9 +77,9 @@ shutil.rmtree(tmp)
 print("C. compile fails mid-way (bad --config)")
 tmp, fake = fresh_home(); os.makedirs(f"{fake}/.grok/hooks", exist_ok=True)
 open(f"{fake}/.grok/hooks/flint.json", "w").write('{"precious":"do not truncate me"}')
-env = dict(os.environ, HOME=fake, PATH=f"{os.path.dirname(BIN)}:{os.environ['PATH']}",
-           HARNESSES="grok", CFG=f"{fake}/.flint/NOSUCH.toml")
-subprocess.run(["bash", "-c", 'HARNESSES="$HARNESSES"\nCFG="$CFG"\n' + loop], capture_output=True, text=True, env=env)
+env = dict(os.environ, HOME=fake, FLINT=BIN)
+subprocess.run(["bash", WIRE, "--config", f"{fake}/.flint/NOSUCH.toml", "grok"],
+               capture_output=True, text=True, env=env)
 kept = json.load(open(f"{fake}/.grok/hooks/flint.json")).get("precious")
 check("existing grok file NOT truncated by a failed compile", kept == "do not truncate me", repr(kept))
 shutil.rmtree(tmp)
@@ -88,7 +88,6 @@ shutil.rmtree(tmp)
 # D: codex-only operator whose canon holds ONLY a path rule — the AGENTS.md block is
 # their only path governance, so the doc's context-file step must still write it.
 print("D. codex-only, path-rule-only canon (AGENTS.md is the only governance)")
-ctx = next(b for b in blocks if "--target-dir" in b)
 tmp = tempfile.mkdtemp(); fake = os.path.join(tmp, "home"); os.makedirs(fake)
 subprocess.run([BIN, "init", "--home", f"{fake}/.flint", "--scope", "t"], capture_output=True)
 open(f"{fake}/.flint/canon/rules/no-secrets.md", "w").write(
