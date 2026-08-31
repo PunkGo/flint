@@ -13,6 +13,8 @@ flint law list   --config ~/.flint/flint.toml
 flint law accept --all --config ~/.flint/flint.toml --key ~/.flint/keys/sovereign_ed25519
 ```
 
+Writing your own? The complete field table is [`../../docs/reference.md`](../../docs/reference.md).
+
 Three properties are enforced by the test suite: every sample parses clean; every
 sample is `proposed` — it may never claim to already bear weight; and none carries a
 private pointer or an absolute home path. Edit them,

@@ -18,6 +18,7 @@ nul
 docs/*
 !docs/whitepaper.md
 !docs/PIP-*.md
+!docs/reference.md
 *-dossiers.md
 *-methodology.md
 *-threat-model.md

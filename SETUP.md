@@ -80,7 +80,9 @@ HARNESSES="claude codex grok"   # only the ones the operator named
 
 `--scope <name>` (an instance namespace that stops one machine's signed canon being
 replayed on another) defaults to `local`; leave it unless the operator runs several
-independent flint homes.
+independent flint homes. Every key `flint.toml` accepts is tabulated in
+[`docs/reference.md`](docs/reference.md) — read it there rather than guessing, since an
+unknown key is a hard load error.
 
 ## Install
 
@@ -140,7 +142,10 @@ cp "$REPO"/examples/laws/<chosen>.md "$FLINT_HOME/canon/rules/"
 flint law list --config "$CFG"
 ```
 
-They may also want their own rule; the format is in `examples/laws/README.md`.
+They may also want a rule of their own: the complete frontmatter field
+table is [`docs/reference.md`](docs/reference.md). Two traps it names — an
+unrecognized key fails the whole canon closed, and an omitted `status:` counts as
+`accepted` — are the ones worth reading before you draft anything.
 
 *Done when* `law list` shows every chosen rule as `proposed` **and nothing else** —
 the canon directory must contain exactly what the operator agreed to, because the next

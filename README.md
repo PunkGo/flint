@@ -136,7 +136,8 @@ Do not write into secrets/. Use a vault / Keychain pointer.
 (`kind: command` matches a regex over a shell command; `kind: advisory` is a guideline
 compiled into agent context rather than a gate.) Sample rules grown from real practice
 live in [`examples/laws/`](examples/laws/) — copy, read, then sign: nothing bears weight
-until you accept it (`propose ≠ pick`, the sovereignty line).
+until you accept it (`propose ≠ pick`, the sovereignty line). Every field, and every
+`flint.toml` key, is tabulated in [`docs/reference.md`](docs/reference.md).
 
 ## Using it day to day
 

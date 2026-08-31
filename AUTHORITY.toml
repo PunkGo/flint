@@ -8,6 +8,7 @@ setup_manual_file = "SETUP.md"
 constitution_files = ["docs/whitepaper.md", "docs/PIP-0001-core-freeze.md"]
 contributing_file = "CONTRIBUTING.md"
 security_file = "SECURITY.md"
+reference_file = "docs/reference.md"
 runbook_files = ["skills/flint-knowledge/SKILL.md", "skills/flint-status/SKILL.md"]
 
 [recovery]
