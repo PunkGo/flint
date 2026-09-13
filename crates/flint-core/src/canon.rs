@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 
 use crate::glob::glob_is_wellformed;
 use crate::touchstone::{
-    pattern_compiles, AdvisoryRule, GateRule, Matcher, Response, Reversibility, TouchstonePolicy,
+    pattern_compiles, AdvisoryRule, AdvisoryStyle, GateRule, Matcher, Response, Reversibility, TouchstonePolicy,
 };
 
 /// Evidence maturity of a rule (reframe-and-diff §3.7). Parsed + stored in P1 but NOT
@@ -273,7 +273,7 @@ const KNOWN_KEYS: &[&str] = &[
     // provenance (schema v1)
     "version", "created", "description", "source.kind", "source.ref", "scope", "supersedes", "tags",
     // advisory (kind:advisory)
-    "trigger",
+    "trigger", "inject",
     // dormant (forge) — parsed, not load-bearing
     "evidence_tier",
 ];
@@ -502,7 +502,17 @@ fn parse_advisory(
     if trigger.is_empty() {
         return Err(CanonError::MissingField { file: file.into(), field: "trigger" });
     }
-    Ok(AdvisoryRule { id, description, message, trigger, scope: meta.scope })
+    // inject: how this rule is carried into agent context. Optional; absent = the
+    // instance default. Only the two exact words — a typo must not silently mean "default".
+    let inject = match get("inject") {
+        None => None,
+        Some(s) => Some(AdvisoryStyle::parse(s).ok_or_else(|| CanonError::BadValue {
+            file: file.into(),
+            field: "inject",
+            value: s.into(),
+        })?),
+    };
+    Ok(AdvisoryRule { id, description, message, trigger, scope: meta.scope, inject })
 }
 
 /// Rewrite a rule file's frontmatter `status:` to `new`, preserving everything else byte for
@@ -1115,6 +1125,27 @@ mod tests {
             }
             ParsedRule::Gate(_) => panic!("expected advisory, got gate"),
         }
+    }
+
+    #[test]
+    fn advisory_inject_key_parses_both_words_and_defaults_to_none() {
+        match parse_rule("rules/verify.md", ADVISORY_RULE).expect("parses") {
+            ParsedRule::Advisory(a) => assert_eq!(a.inject, None, "no inject key = follow the instance default"),
+            ParsedRule::Gate(_) => panic!("expected advisory"),
+        }
+        for (word, want) in [("full", AdvisoryStyle::Full), ("compact", AdvisoryStyle::Compact)] {
+            let t = ADVISORY_RULE.replace("trigger:", &format!("inject: {word}\ntrigger:"));
+            match parse_rule("rules/verify.md", &t).expect("parses") {
+                ParsedRule::Advisory(a) => assert_eq!(a.inject, Some(want)),
+                ParsedRule::Gate(_) => panic!("expected advisory"),
+            }
+        }
+    }
+
+    #[test]
+    fn advisory_inject_typo_is_a_loud_error_not_the_default() {
+        let t = ADVISORY_RULE.replace("trigger:", "inject: Full\ntrigger:");
+        assert!(matches!(parse_rule("rules/verify.md", &t), Err(CanonError::BadValue { field: "inject", .. })));
     }
 
     #[test]

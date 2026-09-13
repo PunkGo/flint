@@ -13,6 +13,7 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
+use crate::touchstone::AdvisoryStyle;
 use crate::trust::SovereignTrust;
 
 /// The pinned sovereign trust block (root of trust, §3.5.1).
@@ -117,6 +118,28 @@ fn default_true() -> bool {
     true
 }
 
+/// Advisory carriage block (`[advisory]`): how `kind: advisory` rules ride into agent
+/// context. `compact` (the default) puts one headline + trigger line per rule into the
+/// always-loaded file and leaves the body to `flint canon show` on demand — measured on
+/// a 20-rule canon: 35 KB → ~7 KB per session start. `full` inlines every body, the
+/// original behaviour. A rule's own `inject:` key overrides this default either way.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdvisoryConfig {
+    /// The instance default for rules that carry no `inject:` key.
+    #[serde(default = "default_advisory_style")]
+    pub style: AdvisoryStyle,
+}
+
+impl Default for AdvisoryConfig {
+    fn default() -> Self {
+        Self { style: default_advisory_style() }
+    }
+}
+
+fn default_advisory_style() -> AdvisoryStyle {
+    AdvisoryStyle::Compact
+}
+
 /// Cross-vendor judge block (P4 · §3.7 L2 / §8.4 #5). The veto-only second opinion on a
 /// Forge promotion. DEFAULT OFF — which model + when to consult is the owner's call.
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -166,6 +189,9 @@ pub struct FlintConfig {
     /// Capture defaults (spec skeleton §3, L1 auto-mine). Defaults to on (opt-out).
     #[serde(default)]
     pub capture: CaptureConfig,
+    /// Advisory carriage (`[advisory] style`). Defaults to `compact`.
+    #[serde(default)]
+    pub advisory: AdvisoryConfig,
     /// Raw-ore stores (knowledge-layer spec skeleton §5). When empty, synthesized for
     /// backward-compat from the legacy single `pits_root` (active) + `memory.vault` (source),
     /// so a pre-ore_store config keeps working unchanged. See [`FlintConfig::ore_stores`].
@@ -480,6 +506,18 @@ scope = "i"
         // [capture] with no auto_mine key → still on (the field default).
         let c = cfg("[capture]");
         assert!(c.capture.auto_mine);
+    }
+
+    #[test]
+    fn advisory_style_defaults_to_compact_and_reads_both_words() {
+        // No [advisory] block, and an empty one → compact (the always-loaded file stays small).
+        assert_eq!(cfg("").advisory.style, AdvisoryStyle::Compact);
+        assert_eq!(cfg("[advisory]").advisory.style, AdvisoryStyle::Compact);
+        assert_eq!(cfg("[advisory]\nstyle = \"full\"").advisory.style, AdvisoryStyle::Full);
+        assert_eq!(cfg("[advisory]\nstyle = \"compact\"").advisory.style, AdvisoryStyle::Compact);
+        // A typo is a load error, never silently the default.
+        let base = "flint_bin=\"flint\"\ncanon_root=\"canon\"\n[advisory]\nstyle = \"Full\"\n[trust]\nallowed_signers=\"as\"\nsigner_identity=\"s\"\nscope=\"i\"\n";
+        assert!(toml::from_str::<FlintConfig>(base).is_err());
     }
 
     #[test]

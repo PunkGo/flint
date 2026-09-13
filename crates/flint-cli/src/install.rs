@@ -608,15 +608,18 @@ fn run_install_inner(args: &InstallArgs) -> Result<i32> {
     });
     // Alongside the signed policy, carry flint's opt-out capture toggle: the advisory generators
     // append the L1 capture default when it is on (§3). Off (or no config) → nothing appended.
-    let (policy, auto_mine) = if needs_policy {
+    // The advisory carriage (`[advisory] style` + the fetch command for compact rules) rides
+    // along too: it pins the same binary + config as the hook wiring.
+    let (policy, auto_mine, render) = if needs_policy {
         let cfg_path = args.config.as_ref().ok_or_else(|| {
             anyhow::anyhow!("manifest has generator entries in scope — pass --config (they render from the signed canon)")
         })?;
         let cfg = FlintConfig::load(cfg_path)?;
         let policy = hook::load_policy(&cfg).map_err(|e| anyhow::anyhow!("signed canon unavailable: {e}"))?;
-        (Some(policy), cfg.capture.auto_mine)
+        let render = striker::AdvisoryRender::new(cfg.advisory.style, &cfg.flint_bin, &cfg_path.display().to_string());
+        (Some(policy), cfg.capture.auto_mine, Some(render))
     } else {
-        (None, false)
+        (None, false, None)
     };
 
     let mut resolved: Vec<Resolved> = Vec::new();
@@ -697,12 +700,14 @@ fn run_install_inner(args: &InstallArgs) -> Result<i32> {
                 let (desired, rendered) = match generator {
                     GeneratorKind::ClaudeAdvisory => {
                         let policy = policy.as_ref().expect("policy loaded when advisory generators in scope");
-                        let body = crate::capture::append_advisory(&striker::claude_advisory_rules(policy), auto_mine);
+                        let render = render.as_ref().expect("render built alongside the policy");
+                        let body = crate::capture::append_advisory(&striker::claude_advisory_rules(policy, render), auto_mine);
                         (Desired::File(body.clone()), body)
                     }
                     GeneratorKind::CodexAgentsBlock => {
                         let policy = policy.as_ref().expect("policy loaded when advisory generators in scope");
-                        let body = crate::capture::append_advisory(&striker::codex_agents_md(policy), auto_mine);
+                        let render = render.as_ref().expect("render built alongside the policy");
+                        let body = crate::capture::append_advisory(&striker::codex_agents_md(policy, render), auto_mine);
                         (
                             Desired::Block { marker: "flint".into(), content: body.clone() },
                             body,

@@ -59,8 +59,8 @@ should not reconstruct *what command*. Don't call this "explainability".
    - one honest note if anything looks off (zero receipts from a live harness, a rule
      that stopped firing after a canon change, deny spikes).
 4. **Never interpret beyond the ledger.** If the user asks "why did it deny X", the
-   answer is the rule id + that rule's text (`flint canon list --config $FLINT_CFG`) —
-   not a reconstruction of the denied content.
+   answer is the rule id + that rule's text (`flint canon show --config $FLINT_CFG
+   --name <id>`) — not a reconstruction of the denied content.
 
 ## Discipline
 - Read-only; no writes, no config edits, no canon changes.

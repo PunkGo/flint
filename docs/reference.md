@@ -63,6 +63,16 @@ into the file each harness reads as standing instructions.
 |---|---|---|
 | `description` | yes | The one-line summary the agent sees first. |
 | `trigger` | yes | Comma-separated situations this applies to. Compiled into the rendered text as *"Applies when: …"*. |
+| `inject` | no | `full` or `compact` — how this rule rides into agent context, overriding `[advisory] style`. Absent follows the instance default. Any other word is a lint error, never silently the default. |
+
+How an advisory reaches the agent is a carriage choice, not a content one. The
+always-loaded file (`~/.claude/rules/flint-advisory.md`, the marked block in
+`~/.codex/AGENTS.md`) is paid for at every session start, so under `compact` carriage a
+rule contributes one index line — `description` plus *Applies when* — and a dispatch
+paragraph tells the agent to run `flint canon show --config <cfg> --name <id>` when a
+trigger matches, before acting. That prints the **signed** file byte for byte (`flint law
+show` prints the working tree). Under `full` carriage the body is inlined, as before.
+Measured on a 20-rule canon: ~35 KB per start under `full`, ~7 KB under `compact`.
 
 An advisory that carries any gate field (`pattern`, `glob`, `exempt`, `response`,
 `reversibility`, `suggestion`) is refused — the two shapes are kept mutually exclusive
@@ -108,6 +118,12 @@ loud error everywhere rather than a surprise from whichever command trips over i
 | `scope` | yes | This instance's namespace; must equal the manifest scope. Stops one machine's signed canon being replayed on another. |
 | `min_epoch` | no | Anti-rollback floor, default `0`. |
 | `epoch_floor` | no | Path to a persistent high-water epoch file. `canon pick` advances it; the gate floors the accepted epoch at it, so checking out an older validly-signed manifest is refused without a manual bump. Weak tier by design — a same-UID agent can edit this file too. |
+
+### `[advisory]` — how advisory rules ride into agent context
+
+| Key | Default | Meaning |
+|---|---|---|
+| `advisory.style` | `compact` | Carriage for rules without an `inject:` key. `compact`: headline + triggers in the always-loaded file, body fetched on demand with `flint canon show`. `full`: every body inlined. Re-run `flint compile --target-dir` / `flint install --stage full` after changing it — the files are rendered, not read live. |
 
 ### `[memory]`, `[capture]` — opt-in behavior
 

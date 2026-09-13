@@ -125,6 +125,38 @@ pub struct GateRule {
 /// gate. It has no matcher and never produces a verdict — it is guidance delivered at
 /// the user-message level (official Claude/Codex semantics: context is guidance, hooks
 /// enforce). advisory is the "carry it over" arm of the whitepaper's second action.
+/// How an advisory rule is carried into agent context: the whole body always present
+/// (`full`), or only its headline + triggers with the body fetched on demand through
+/// `flint canon show` (`compact`). A rule pins its own carriage with the `inject:`
+/// frontmatter key; rules without one follow the instance default (`[advisory] style`
+/// in flint.toml). Either way the SIGNED rule is what the agent ends up reading — compact
+/// changes when the body enters context, never which text it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AdvisoryStyle {
+    Full,
+    Compact,
+}
+
+impl AdvisoryStyle {
+    /// The frontmatter / config word for this style.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AdvisoryStyle::Full => "full",
+            AdvisoryStyle::Compact => "compact",
+        }
+    }
+
+    /// Parse the frontmatter word. `None` on anything but the two exact words.
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "full" => Some(AdvisoryStyle::Full),
+            "compact" => Some(AdvisoryStyle::Compact),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AdvisoryRule {
     pub id: String,
@@ -136,6 +168,8 @@ pub struct AdvisoryRule {
     pub trigger: Vec<String>,
     /// Effect-range selectors (which agents / projects it is compiled into).
     pub scope: Vec<String>,
+    /// Per-rule carriage override (`inject:` key). `None` = follow `[advisory] style`.
+    pub inject: Option<AdvisoryStyle>,
 }
 
 /// The active sovereign policy. `rules` are runtime gates (judged); `advisory` are

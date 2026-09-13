@@ -66,6 +66,7 @@ watching a command fail to run, which is why setup ends with a live-fire probe.
 flint law list                 # rules in the working tree, and their status
 flint law accept --name <id>   # sign one in            (yours to run, not your agent's)
 flint canon list               # the signed set actually in force
+flint canon show --name <id>   # one signed rule, byte for byte (what a compact advisory index points at)
 flint canon pick               # re-sign after editing a rule
 flint pit mark "<gist>"        # capture a wall as you hit it
 flint knowledge review         # triage captures; nothing is ever auto-promoted

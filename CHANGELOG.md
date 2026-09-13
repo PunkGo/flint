@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.4 — unreleased
+
+- **Advisory carriage is now `compact` by default.** The always-loaded context file
+  (`~/.claude/rules/flint-advisory.md`, the marked block in `~/.codex/AGENTS.md`) used to
+  inline every advisory body — measured at ~35 KB per session start on a 20-rule canon,
+  paid on both harnesses whether or not a session ever needed a given rule. Under
+  `compact` each rule contributes its headline and triggers (~7 KB for the same canon)
+  and a dispatch paragraph tells the agent to fetch the signed body with the new
+  `flint canon show --config <cfg> --name <id>` when a trigger matches, before acting.
+  `[advisory] style = "full"` in flint.toml restores the old rendering; a single rule
+  pins its own carriage with `inject: full | compact` in its frontmatter. Re-render
+  (`compile --target-dir` / `install --stage full`) after changing either.
+- `flint canon show --name <id>` prints one **signed** rule byte for byte, by id, after
+  verifying the manifest — the fetch a compact index points at. `flint law show` keeps
+  reading the working tree; the two are different views on purpose.
+
 ## 0.1.3 — 2026-08-31
 
 - The shipped `secret-zero` sample was a version behind the author's own copy and

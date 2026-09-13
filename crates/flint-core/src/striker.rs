@@ -18,7 +18,7 @@
 
 use serde_json::{json, Value};
 
-use crate::touchstone::{AdvisoryRule, Matcher, Response, TouchstonePolicy};
+use crate::touchstone::{AdvisoryRule, AdvisoryStyle, Matcher, Response, TouchstonePolicy};
 
 /// Inputs to the compiler: where the flint binary is and where its (entrypoint-boundary
 /// protected) runtime config lives. The Canon rules themselves are NOT embedded — they
@@ -131,10 +131,86 @@ pub fn grok_hooks_for(p: &CompileParams, windows: bool) -> Value {
     })
 }
 
+/// How Striker carries advisory rules into a harness's always-loaded context file.
+///
+/// Every session start pays for that file in full, so the body of a rule the session
+/// never needs is pure cost: measured on a 20-rule canon, the full carriage is ~35 KB
+/// per start on BOTH Claude (`rules/flint-advisory.md`) and Codex (the AGENTS.md block).
+/// `compact` carriage keeps each rule's headline + triggers in the file (~7 KB for the
+/// same canon) and tells the agent how to fetch the signed body when a trigger matches.
+/// The instance default is `[advisory] style`; a rule's own `inject:` key wins over it.
+#[derive(Debug, Clone)]
+pub struct AdvisoryRender {
+    /// Carriage for rules that carry no `inject:` key.
+    pub style: AdvisoryStyle,
+    /// The command an agent runs to fetch one compact rule's signed text, with the literal
+    /// placeholder `<id>` where the rule id goes. Rendered into the dispatch paragraph.
+    pub show_command: String,
+}
+
+impl AdvisoryRender {
+    /// Build from the instance config: the same binary + config the hook wiring pins, so
+    /// the agent fetches from the signed canon the hook itself judges by.
+    pub fn new(style: AdvisoryStyle, flint_bin: &str, config_path: &str) -> Self {
+        Self {
+            style,
+            show_command: format!("{flint_bin} canon show --config {config_path} --name <id>"),
+        }
+    }
+
+    /// Everything inline — the pre-compact behaviour, for callers that render without a
+    /// config (the print-only compile path still passes one; this is for tests).
+    pub fn full() -> Self {
+        Self { style: AdvisoryStyle::Full, show_command: "flint canon show --name <id>".into() }
+    }
+
+    fn effective(&self, a: &AdvisoryRule) -> AdvisoryStyle {
+        a.inject.unwrap_or(self.style)
+    }
+
+    /// The advisory rules compiled into `harness`, split by their effective carriage:
+    /// `(full, compact)`, each in canon order.
+    fn split<'a>(&self, policy: &'a TouchstonePolicy, harness: &str) -> (Vec<&'a AdvisoryRule>, Vec<&'a AdvisoryRule>) {
+        let mut full = Vec::new();
+        let mut compact = Vec::new();
+        for a in policy.advisory.iter().filter(|a| advisory_applies(a, harness)) {
+            match self.effective(a) {
+                AdvisoryStyle::Full => full.push(a),
+                AdvisoryStyle::Compact => compact.push(a),
+            }
+        }
+        (full, compact)
+    }
+
+    /// The dispatch paragraph above the compact index: what the index is, and the one
+    /// action the agent takes when a trigger matches. The fetched text is the signed
+    /// rule — the same bytes the hook judges by — so the agent never reads a paraphrase.
+    fn dispatch_paragraph(&self) -> String {
+        format!(
+            "The rules below are indexed by headline and trigger only; their full text is \
+             not in this file. When a trigger matches what you are about to do, fetch the \
+             rule and read it BEFORE acting — one command, the signed text:\n\n\
+             ```\n{}\n```\n",
+            self.show_command
+        )
+    }
+}
+
+/// One compact index line: headline + triggers, no body.
+fn compact_line(a: &AdvisoryRule) -> String {
+    let mut line = format!("- **{}** — {}", a.id, a.description.trim());
+    if !a.trigger.is_empty() {
+        line.push_str(&format!("\n  _Applies when: {}_", a.trigger.join(", ")));
+    }
+    line
+}
+
 /// AGENTS.md advisory for Codex: the SCOPE (file-path) rules rendered as guidance, since
 /// apply_patch hook interception is flaky (honest boundary). Command rules are omitted —
-/// they enforce via the Bash hook. Returns an empty string if there are no scope rules.
-pub fn codex_agents_md(policy: &TouchstonePolicy) -> String {
+/// they enforce via the Bash hook. Advisory rules follow `render`: full ones inline under
+/// "Behavioral guidelines", compact ones as an index under "On-demand guidelines". Returns
+/// an empty string if there is nothing to say.
+pub fn codex_agents_md(policy: &TouchstonePolicy, render: &AdvisoryRender) -> String {
     // File-scope (path) rules — rendered as guidance since apply_patch hook interception
     // is flaky. Command rules are omitted (they enforce via the Bash hook).
     let mut path_lines: Vec<String> = Vec::new();
@@ -150,10 +226,11 @@ pub fn codex_agents_md(policy: &TouchstonePolicy) -> String {
             path_lines.push(format!("- **{verb} `{glob}`** ({}): {msg}", r.id));
         }
     }
-    // Advisory (kind:advisory) rules — behavioral guidelines injected as full guidance,
-    // filtered to those whose scope applies to Codex.
-    let advisory = render_advisory_blocks(policy, "  ", "codex");
-    if path_lines.is_empty() && advisory.is_empty() {
+    // Advisory (kind:advisory) rules, filtered to those whose scope applies to Codex and
+    // split by carriage.
+    let (full, compact) = render.split(policy, "codex");
+    let advisory = render_advisory_blocks(&full, "  ");
+    if path_lines.is_empty() && advisory.is_empty() && compact.is_empty() {
         return String::new();
     }
     let mut out = String::from(
@@ -172,19 +249,26 @@ pub fn codex_agents_md(policy: &TouchstonePolicy) -> String {
     if !advisory.is_empty() {
         out.push_str("### Behavioral guidelines\n\n");
         out.push_str(&advisory);
+        if !compact.is_empty() {
+            out.push('\n');
+        }
+    }
+    if !compact.is_empty() {
+        out.push_str("### On-demand guidelines\n\n");
+        out.push_str(&render.dispatch_paragraph());
+        out.push('\n');
+        out.push_str(&compact.iter().map(|a| compact_line(a)).collect::<Vec<_>>().join("\n"));
+        out.push('\n');
     }
     out
 }
 
-/// Render `policy.advisory` as a markdown bullet list: each rule's description, its body
-/// prose (indented by `indent`), and its trigger. Empty string when there are no
-/// advisory rules. Shared by the Codex (AGENTS.md) and Claude (.claude/rules) emitters.
-fn render_advisory_blocks(policy: &TouchstonePolicy, indent: &str, harness: &str) -> String {
+/// Render `rules` as a markdown bullet list: each rule's description, its body prose
+/// (indented by `indent`), and its trigger. Empty string when there are none. The
+/// full-carriage shape, shared by the Codex (AGENTS.md) and Claude (.claude/rules) emitters.
+fn render_advisory_blocks(rules: &[&AdvisoryRule], indent: &str) -> String {
     let mut blocks: Vec<String> = Vec::new();
-    for a in &policy.advisory {
-        if !advisory_applies(a, harness) {
-            continue;
-        }
+    for a in rules {
         let mut block = format!("- **{}** — {}", a.id, a.description.trim());
         let body = a.message.trim();
         if !body.is_empty() {
@@ -216,12 +300,12 @@ fn advisory_applies(a: &AdvisoryRule, harness: &str) -> bool {
 
 /// The body of `.claude/rules/flint-advisory.md`: flint's advisory (kind:advisory) rules
 /// as always-on guidance (no `paths` frontmatter → loaded every session, delivered as a
-/// user-message-level rule per Claude Code's memory semantics). Empty string when there
-/// are no advisory rules (the caller then writes nothing).
-pub fn claude_advisory_rules(policy: &TouchstonePolicy) -> String {
-    let applicable: Vec<&AdvisoryRule> =
-        policy.advisory.iter().filter(|a| advisory_applies(a, "claude")).collect();
-    if applicable.is_empty() {
+/// user-message-level rule per Claude Code's memory semantics). Full-carriage rules are
+/// one `##` section each; compact ones form the "On-demand rules" index at the end.
+/// Empty string when there are no advisory rules (the caller then writes nothing).
+pub fn claude_advisory_rules(policy: &TouchstonePolicy, render: &AdvisoryRender) -> String {
+    let (full, compact) = render.split(policy, "claude");
+    if full.is_empty() && compact.is_empty() {
         return String::new();
     }
     let mut out = String::from(
@@ -229,7 +313,7 @@ pub fn claude_advisory_rules(policy: &TouchstonePolicy) -> String {
          Your operator's behavioral boundaries, compiled from Canon. These are guidance \
          (not enforced by a hook); follow them as you would your own standing rules.\n\n",
     );
-    for a in applicable {
+    for a in full {
         out.push_str(&format!("## {}\n\n{}\n\n", a.id, a.description.trim()));
         let body = a.message.trim();
         if !body.is_empty() {
@@ -239,6 +323,13 @@ pub fn claude_advisory_rules(policy: &TouchstonePolicy) -> String {
         if !a.trigger.is_empty() {
             out.push_str(&format!("_Applies when: {}_\n\n", a.trigger.join(", ")));
         }
+    }
+    if !compact.is_empty() {
+        out.push_str("## On-demand rules\n\n");
+        out.push_str(&render.dispatch_paragraph());
+        out.push('\n');
+        out.push_str(&compact.iter().map(|a| compact_line(a)).collect::<Vec<_>>().join("\n"));
+        out.push_str("\n\n");
     }
     out
 }
@@ -403,7 +494,7 @@ mod tests {
             ],
             advisory: Vec::new(),
         };
-        let md = codex_agents_md(&policy);
+        let md = codex_agents_md(&policy, &AdvisoryRender::full());
         assert!(md.contains("knowledge/secret/**"));
         assert!(md.contains("DO NOT touch"));
         assert!(md.contains("never write secrets"));
@@ -414,7 +505,7 @@ mod tests {
     #[test]
     fn agents_md_empty_when_no_scope_rules() {
         let policy = TouchstonePolicy { rules: vec![cmd_rule("lsp")], advisory: Vec::new() };
-        assert_eq!(codex_agents_md(&policy), "");
+        assert_eq!(codex_agents_md(&policy, &AdvisoryRender::full()), "");
     }
 
     fn adv(id: &str) -> AdvisoryRule {
@@ -424,13 +515,18 @@ mod tests {
             message: format!("body guidance for {id}"),
             trigger: vec!["when-x".into(), "when-y".into()],
             scope: vec!["global".into()],
+            inject: None,
         }
+    }
+
+    fn compact_render() -> AdvisoryRender {
+        AdvisoryRender::new(AdvisoryStyle::Compact, "/usr/local/bin/flint", "/home/u/.flint/flint.toml")
     }
 
     #[test]
     fn agents_md_includes_advisory() {
         let policy = TouchstonePolicy { rules: vec![], advisory: vec![adv("verify-first")] };
-        let md = codex_agents_md(&policy);
+        let md = codex_agents_md(&policy, &AdvisoryRender::full());
         assert!(md.contains("### Behavioral guidelines"));
         assert!(md.contains("verify-first"));
         assert!(md.contains("desc for verify-first"));
@@ -441,15 +537,66 @@ mod tests {
     #[test]
     fn claude_advisory_rules_renders_each_and_empty() {
         let policy = TouchstonePolicy { rules: vec![], advisory: vec![adv("a1"), adv("a2")] };
-        let md = claude_advisory_rules(&policy);
+        let md = claude_advisory_rules(&policy, &AdvisoryRender::full());
         assert!(md.starts_with("# Flint advisory rules"));
         assert!(md.contains("## a1"));
         assert!(md.contains("## a2"));
         assert!(md.contains("desc for a1"));
+        assert!(md.contains("body guidance for a1"));
         assert!(md.contains("_Applies when: when-x, when-y_"));
+        assert!(!md.contains("On-demand"), "full carriage has no index section");
         // empty advisory -> empty string (caller writes nothing)
         let empty = TouchstonePolicy { rules: vec![], advisory: vec![] };
-        assert_eq!(claude_advisory_rules(&empty), "");
+        assert_eq!(claude_advisory_rules(&empty, &AdvisoryRender::full()), "");
+        assert_eq!(claude_advisory_rules(&empty, &compact_render()), "");
+    }
+
+    #[test]
+    fn compact_carriage_indexes_headline_and_trigger_without_body() {
+        let policy = TouchstonePolicy { rules: vec![], advisory: vec![adv("a1"), adv("a2")] };
+        let render = compact_render();
+        // claude: no per-rule sections, one index, the fetch command with the config pinned.
+        let md = claude_advisory_rules(&policy, &render);
+        assert!(md.contains("## On-demand rules"));
+        assert!(!md.contains("## a1"), "compact rules are index lines, not sections: {md}");
+        assert!(md.contains("- **a1** — desc for a1\n  _Applies when: when-x, when-y_"));
+        assert!(!md.contains("body guidance"), "the body must not ride along in compact carriage: {md}");
+        assert!(md.contains("/usr/local/bin/flint canon show --config /home/u/.flint/flint.toml --name <id>"));
+        // codex: same split, under the block's own heading; the full heading is absent.
+        let agents = codex_agents_md(&policy, &render);
+        assert!(agents.contains("### On-demand guidelines"));
+        assert!(!agents.contains("### Behavioral guidelines"));
+        assert!(agents.contains("- **a2** — desc for a2"));
+        assert!(!agents.contains("body guidance"));
+        assert!(agents.contains("canon show --config /home/u/.flint/flint.toml --name <id>"));
+    }
+
+    #[test]
+    fn inject_key_overrides_the_instance_default_both_ways() {
+        let mut pinned_full = adv("pinned-full");
+        pinned_full.inject = Some(AdvisoryStyle::Full);
+        let mut pinned_compact = adv("pinned-compact");
+        pinned_compact.inject = Some(AdvisoryStyle::Compact);
+        let policy = TouchstonePolicy {
+            rules: vec![],
+            advisory: vec![pinned_full.clone(), adv("follows-default"), pinned_compact.clone()],
+        };
+        // instance default compact: the pinned-full rule still rides whole.
+        let md = claude_advisory_rules(&policy, &compact_render());
+        assert!(md.contains("## pinned-full") && md.contains("body guidance for pinned-full"));
+        assert!(!md.contains("## follows-default"));
+        assert!(md.contains("- **follows-default** —"));
+        assert!(md.contains("- **pinned-compact** —"));
+        // instance default full: the pinned-compact rule is still only indexed.
+        let md = claude_advisory_rules(&policy, &AdvisoryRender::full());
+        assert!(md.contains("## follows-default") && md.contains("body guidance for follows-default"));
+        assert!(!md.contains("## pinned-compact"));
+        assert!(md.contains("- **pinned-compact** —") && !md.contains("body guidance for pinned-compact"));
+        // full sections come first, the index last — so the codex block reads the same way.
+        let agents = codex_agents_md(&policy, &AdvisoryRender::full());
+        let full_at = agents.find("### Behavioral guidelines").unwrap();
+        let index_at = agents.find("### On-demand guidelines").unwrap();
+        assert!(full_at < index_at);
     }
 
     #[test]
@@ -460,16 +607,19 @@ mod tests {
             message: "body".into(),
             trigger: vec![],
             scope: vec!["agent:claude".into()],
+            inject: None,
         };
         let global = adv("global-rule"); // adv() scopes to ["global"] → applies everywhere
         let policy = TouchstonePolicy { rules: vec![], advisory: vec![claude_only, global] };
-        // codex gets the global rule, NOT the agent:claude-scoped one
-        let codex_md = codex_agents_md(&policy);
-        assert!(codex_md.contains("global-rule"));
-        assert!(!codex_md.contains("claude-rule"), "agent:claude rule must not leak into codex");
-        // claude gets both
-        let claude_md = claude_advisory_rules(&policy);
-        assert!(claude_md.contains("global-rule") && claude_md.contains("claude-rule"));
+        for render in [AdvisoryRender::full(), compact_render()] {
+            // codex gets the global rule, NOT the agent:claude-scoped one
+            let codex_md = codex_agents_md(&policy, &render);
+            assert!(codex_md.contains("global-rule"));
+            assert!(!codex_md.contains("claude-rule"), "agent:claude rule must not leak into codex");
+            // claude gets both
+            let claude_md = claude_advisory_rules(&policy, &render);
+            assert!(claude_md.contains("global-rule") && claude_md.contains("claude-rule"));
+        }
     }
 
     #[test]

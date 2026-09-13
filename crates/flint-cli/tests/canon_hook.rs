@@ -631,6 +631,14 @@ fn compile_target_dir_writes_advisory_files() {
     assert!(rules.contains("verify-before-claiming"), "advisory id in rules: {rules}");
     assert!(rules.contains("Verify external state before asserting it."));
     assert!(rules.contains("Applies when: before-reporting-status"));
+    // default carriage is compact: headline + trigger ride, the body does not, and the
+    // fetch command pins THIS config so the agent reads the signed rule.
+    assert!(rules.contains("## On-demand rules"), "compact index expected by default: {rules}");
+    assert!(!rules.contains("Do not assert a fact from memory"), "body must not ride in compact carriage: {rules}");
+    assert!(
+        rules.contains(&format!("canon show --config {} --name <id>", env.config.display())),
+        "fetch command pins the instance config: {rules}"
+    );
 
     // codex: upserts the flint block in AGENTS.md, preserving user content
     fs::write(target.path().join("AGENTS.md"), "# My project\n\nuser rules here\n").unwrap();
@@ -646,7 +654,81 @@ fn compile_target_dir_writes_advisory_files() {
     assert!(agents.contains("user rules here"), "user content preserved: {agents}");
     assert!(agents.contains("<!-- flint:begin -->"));
     assert!(agents.contains("verify-before-claiming"));
-    assert!(agents.contains("Behavioral guidelines"));
+    assert!(agents.contains("On-demand guidelines"));
+    assert!(!agents.contains("Behavioral guidelines"), "no full-carriage section under the compact default");
+    assert!(!agents.contains("Do not assert a fact from memory"));
+}
+
+#[test]
+fn compile_full_carriage_via_config_style_or_inject_key() {
+    let env = setup();
+    fs::write(env.canon_root.join("rules/verify.md"), VERIFY_ADVISORY).unwrap();
+    // a second advisory that pins its own carriage: inject: full
+    let pinned = VERIFY_ADVISORY
+        .replace("id: verify-before-claiming", "id: pinned-full")
+        .replace("trigger:", "inject: full\ntrigger:")
+        .replace("Do not assert a fact from memory", "Pinned body rides whole");
+    fs::write(env.canon_root.join("rules/pinned.md"), pinned).unwrap();
+    pick(&env);
+    let target = tempfile::tempdir().unwrap();
+    let compile = |env: &Env, target: &std::path::Path| {
+        let (code, _o, e) = run(
+            &[
+                "compile", "--harness", "claude", "--config", env.config.to_str().unwrap(),
+                "--target-dir", target.to_str().unwrap(),
+            ],
+            None,
+        );
+        assert_eq!(code, 0, "compile claude failed: {e}");
+        fs::read_to_string(target.join(".claude/rules/flint-advisory.md")).unwrap()
+    };
+
+    // instance default compact: only the inject:full rule carries its body.
+    let rules = compile(&env, target.path());
+    assert!(rules.contains("## pinned-full") && rules.contains("Pinned body rides whole"), "{rules}");
+    assert!(!rules.contains("## verify-before-claiming"), "{rules}");
+    assert!(rules.contains("- **verify-before-claiming** —"), "{rules}");
+    assert!(!rules.contains("Do not assert a fact from memory"), "{rules}");
+
+    // [advisory] style = "full": every body rides, no index section at all.
+    let mut cfg_text = fs::read_to_string(&env.config).unwrap();
+    cfg_text.push_str("\n[advisory]\nstyle = \"full\"\n");
+    fs::write(&env.config, cfg_text).unwrap();
+    let rules = compile(&env, target.path());
+    assert!(rules.contains("## verify-before-claiming") && rules.contains("Do not assert a fact from memory"), "{rules}");
+    assert!(rules.contains("## pinned-full"));
+    assert!(!rules.contains("On-demand"), "{rules}");
+}
+
+#[test]
+fn canon_show_prints_the_signed_rule_by_id_and_refuses_unknown() {
+    let env = setup();
+    fs::write(env.canon_root.join("rules/verify.md"), VERIFY_ADVISORY).unwrap();
+    pick(&env);
+    // by id, not filename: the file is verify.md, the id is verify-before-claiming.
+    let (code, out, e) = run(
+        &["canon", "show", "--config", env.config.to_str().unwrap(), "--name", "verify-before-claiming"],
+        None,
+    );
+    assert_eq!(code, 0, "canon show failed: {e}");
+    assert_eq!(out, VERIFY_ADVISORY, "prints the signed file byte for byte");
+    // a gate rule resolves by id too
+    let (code, out, _e) = run(&["canon", "show", "--config", env.config.to_str().unwrap(), "--name", "lsp-over-grep"], None);
+    assert_eq!(code, 0);
+    assert!(out.contains("id: lsp-over-grep"), "{out}");
+    // unknown id: non-zero, names the id
+    let (code, _out, e) = run(&["canon", "show", "--config", env.config.to_str().unwrap(), "--name", "ghost"], None);
+    assert_ne!(code, 0);
+    assert!(e.contains("no signed rule with id `ghost`"), "{e}");
+    // the working tree is NOT the source: an unsigned edit must not show up.
+    fs::write(env.canon_root.join("rules/verify.md"), VERIFY_ADVISORY.replace("Do not assert", "TAMPERED")).unwrap();
+    let (code, out, e) = run(
+        &["canon", "show", "--config", env.config.to_str().unwrap(), "--name", "verify-before-claiming"],
+        None,
+    );
+    // either the manifest no longer verifies (fail-closed) or the signed bytes are printed —
+    // never the tampered text.
+    assert!(!out.contains("TAMPERED"), "code={code} out={out} err={e}");
 }
 
 #[test]

@@ -15,7 +15,7 @@ use flint_core::canon;
 use flint_core::config::FlintConfig;
 use flint_core::forge;
 use flint_core::harness::Harness;
-use flint_core::striker::{self, CompileParams};
+use flint_core::striker::{self, AdvisoryRender, CompileParams};
 use flint_core::trust;
 
 mod capture;
@@ -470,6 +470,17 @@ enum CanonCmd {
         #[arg(long)]
         config: PathBuf,
     },
+    /// Print one SIGNED rule's full markdown, by `id` (verifies the manifest first). This is
+    /// the fetch an agent runs when a compact advisory index line matches what it is about
+    /// to do — the text it reads is the signed bytes the hook judges by, never the working
+    /// tree (`flint law show` reads the working tree).
+    Show {
+        #[arg(long)]
+        config: PathBuf,
+        /// The rule id (frontmatter `id:`), not the filename.
+        #[arg(long)]
+        name: String,
+    },
     /// Pick: lint the working-tree rules, build a fresh signed manifest (epoch+1), and sign
     /// it with the sovereign key. This is the ONE sovereign write that makes rules
     /// load-bearing (§3.5: signature = the root of trust).
@@ -495,6 +506,7 @@ fn main() -> Result<()> {
         Commands::Canon { cmd } => match cmd {
             CanonCmd::Lint { config } => run_lint(&config),
             CanonCmd::List { config } => run_list(&config),
+            CanonCmd::Show { config, name } => run_canon_show(&config, &name),
             CanonCmd::Pick { config, key, epoch } => run_pick(&config, &key, epoch),
         },
         Commands::Law { cmd } => match cmd {
@@ -1019,6 +1031,9 @@ fn run_compile(harness: &str, config: &Path, mode: &str, target_dir: Option<&Pat
         mode: mode.to_string(),
     };
     let h = Harness::parse(harness).map_err(|e| anyhow::anyhow!(e))?;
+    // Advisory carriage: the instance default plus the fetch command an agent runs for a
+    // compact rule — pinned to the same binary + config as the hook wiring above.
+    let render = AdvisoryRender::new(cfg.advisory.style, &params.flint_bin, &params.config_path);
     match h {
         Harness::Claude => {
             let wiring = serde_json::to_string_pretty(&striker::claude_settings(&params))?;
@@ -1030,7 +1045,7 @@ fn run_compile(harness: &str, config: &Path, mode: &str, target_dir: Option<&Pat
                     println!("# merge into .claude/settings.json:\n{wiring}");
                     let policy = hook::load_policy(&cfg).map_err(|e| anyhow::anyhow!("gate error: {e}"))?;
                     // Append flint's opt-out capture default (L1); off → base untouched.
-                    let body = capture::append_advisory(&striker::claude_advisory_rules(&policy), cfg.capture.auto_mine);
+                    let body = capture::append_advisory(&striker::claude_advisory_rules(&policy, &render), cfg.capture.auto_mine);
                     let rules_path = dir.join(".claude").join("rules").join("flint-advisory.md");
                     if body.is_empty() {
                         // no advisory rules — remove any stale managed file so Claude
@@ -1061,7 +1076,7 @@ fn run_compile(harness: &str, config: &Path, mode: &str, target_dir: Option<&Pat
                 None => {
                     // print-only: a load failure just means no advisory is printed.
                     let md = hook::load_policy(&cfg)
-                        .map(|p| capture::append_advisory(&striker::codex_agents_md(&p), cfg.capture.auto_mine))
+                        .map(|p| capture::append_advisory(&striker::codex_agents_md(&p, &render), cfg.capture.auto_mine))
                         .unwrap_or_default();
                     if !md.is_empty() {
                         println!("\n# --- append to AGENTS.md ---\n{md}");
@@ -1071,7 +1086,7 @@ fn run_compile(harness: &str, config: &Path, mode: &str, target_dir: Option<&Pat
                     // target_dir WRITES — a load failure must FAIL LOUDLY, not silently
                     // remove the flint block via an empty upsert (codex P2-1).
                     let policy = hook::load_policy(&cfg).map_err(|e| anyhow::anyhow!("gate error: {e}"))?;
-                    let md = capture::append_advisory(&striker::codex_agents_md(&policy), cfg.capture.auto_mine);
+                    let md = capture::append_advisory(&striker::codex_agents_md(&policy, &render), cfg.capture.auto_mine);
                     let agents_path = dir.join("AGENTS.md");
                     let existing = std::fs::read_to_string(&agents_path).unwrap_or_default();
                     let updated = striker::upsert_marked_block(&existing, &md);
@@ -1105,6 +1120,28 @@ fn run_lint(config: &Path) -> Result<()> {
             std::process::exit(1);
         }
     }
+}
+
+/// `flint canon show`: print the SIGNED file whose frontmatter `id:` is `name`, byte for
+/// byte. Verifies the manifest first, so a stale or tampered working tree cannot answer.
+fn run_canon_show(config: &Path, name: &str) -> Result<()> {
+    let cfg = FlintConfig::load(config)?;
+    let files = hook::load_signed_files(&cfg).map_err(|e| anyhow::anyhow!("canon show: {e}"))?;
+    for (path, bytes) in &files {
+        let text = std::str::from_utf8(bytes)
+            .with_context(|| format!("signed file {} is not UTF-8", path.display()))?;
+        // Match on the parsed id (the same parse the hook trusts), not on a filename.
+        let id = match canon::parse_rule(&path.to_string_lossy(), text) {
+            Ok(canon::ParsedRule::Advisory(a)) => a.id,
+            Ok(canon::ParsedRule::Gate(g)) => g.rule.id,
+            Err(_) => continue, // non-rule file in the manifest (fixture / promotion record)
+        };
+        if id == name {
+            print!("{text}");
+            return Ok(());
+        }
+    }
+    anyhow::bail!("no signed rule with id `{name}` (epoch in force: see `flint canon list`)")
 }
 
 fn run_list(config: &Path) -> Result<()> {

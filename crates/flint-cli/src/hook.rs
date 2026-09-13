@@ -92,11 +92,18 @@ fn effective_trust(config: &FlintConfig) -> flint_core::trust::SovereignTrust {
 }
 
 pub fn load_policy(config: &FlintConfig) -> Result<TouchstonePolicy, String> {
+    canon::reduce(&load_signed_files(config)?).map_err(|e| e.to_string())
+}
+
+/// The SIGNED rule files (path → bytes), manifest verified — the exact bytes the hook
+/// judges by. `flint canon show` prints one of these verbatim so an agent fetching a
+/// compact rule reads the signed text, not the working tree.
+pub fn load_signed_files(config: &FlintConfig) -> Result<std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>, String> {
     let canon = ManifestSignedCanon::new(config.canon_root.clone());
     let lb = canon
         .resolve_load_bearing(&effective_trust(config))
         .map_err(|e| e.to_string())?;
-    canon::reduce(&lb.files).map_err(|e| e.to_string())
+    Ok(lb.files)
 }
 
 /// Run the hook over a PreToolUse JSON string for `harness`.

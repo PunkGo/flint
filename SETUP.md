@@ -19,7 +19,7 @@ this and only this outside the repo you cloned:
 | one binary, `flint` | wherever you put it on `PATH` | judge + compiler + CLI; no server, no daemon, no telemetry. It makes no network calls when it runs — installing it, of course, clones and builds |
 | a flint home | `~/.flint` by default | the operator's Ed25519 key (`keys/`, dir `0700`, key `0600`), the rule canon (`canon/rules/`, plain markdown), `flint.toml`, the receipt log, the capture inbox |
 | hook wiring | only the harness configs the operator names — `~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.grok/hooks/flint.json` | a PreToolUse entry pointing that harness at the `flint hook` judge |
-| context files | `<target-dir>/rules/flint-advisory.md` for Claude, a marked block in `<target-dir>/AGENTS.md` for Codex — `$HOME/.claude` and `$HOME/.codex` for a machine-wide install | `advisory` rules as guidance, and on Codex the `path`-rule governance too, since those do not enforce through its hook |
+| context files | `<target-dir>/rules/flint-advisory.md` for Claude, a marked block in `<target-dir>/AGENTS.md` for Codex — `$HOME/.claude` and `$HOME/.codex` for a machine-wide install | `advisory` rules as guidance — by default an index of headline + triggers per rule, the body fetched on demand with `flint canon show` (`[advisory] style` in flint.toml switches to inlining every body) — and on Codex the `path`-rule governance too, since those do not enforce through its hook |
 
 Cloning and building also leave a source tree and a `target/` directory in the repo;
 the optional workflow-skills suite adds `~/.flint/installed.lock`. Removal is
@@ -297,7 +297,9 @@ declaring the install proven: nothing was demonstrated for that harness.
   ready to review and sign it, then hand over `flint canon pick --config "$CFG" --key
   "$KEY"` in the same breath. Gate rules take effect on the next hook call after the
   pick; advisory rules additionally need their `compile --target-dir` re-run to reach
-  agent context.
+  agent context — and under the default `compact` carriage, what reaches context is the
+  rule's headline and triggers; the body arrives when the agent runs the
+  `flint canon show --config "$CFG" --name <id>` line the file itself gives it.
 - **Capture walls.** When you hit a wall or learn something worth keeping:
   `flint pit mark --config "$CFG" "<gist>"`. Nothing is auto-promoted; the operator
   triages with `flint knowledge review`.
