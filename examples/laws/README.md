@@ -14,8 +14,8 @@ flint law accept --name secret-zero --config ~/.flint/flint.toml --key ~/.flint/
 ```
 
 **Start with one.** These are one person's rules and they carry that person's taste:
-`lsp-over-grep` is loud if you do not work through an LSP, `stop-framing-loop` encodes a
-way of working. `secret-zero` is the usual first pick — least intrusive, most obviously
+`lsp-over-grep` notes every source grep if you do not work through an LSP (it speaks, it
+does not block), `stop-framing-loop` encodes a way of working. `secret-zero` is the usual first pick — least intrusive, most obviously
 worth it. Add others when you have felt the need yourself, because a rule you adopted
 because it came in the box is precisely the borrowed judgment Flint exists to prevent.
 (`accept --all` exists, and signs everything currently proposed — reach for it once you
