@@ -2,16 +2,19 @@
 //! (law frontmatter), so its behavior is pinned here against the REAL shipped bytes
 //! (`include_str!`), not a re-typed copy. Fixtures encode the 2026-08-08 false-positive
 //! harvest (six "command merely MENTIONS a grep-containing filename" hits on mac, plus
-//! the cross-segment span and over-wide dir list forms) and the v4 contract:
+//! the cross-segment span and over-wide dir list forms) and the v5 contract:
 //!
-//!   - `lsp-over-grep` (critique): fires only when a grep-family tool is used AS A
+//!   - `lsp-over-grep` (warn, flint/v2): fires when a grep-family tool is used AS A
 //!     COMMAND and a code signal (source extension / strong source dir) appears in the
 //!     SAME `;`/`&`/newline-delimited segment. Pipes do not split a segment (a pipeline
-//!     is one dataflow).
+//!     is one dataflow). The call PROCEEDS — the law recommends LSP, it does not block,
+//!     and it carries no exempt arm (nothing to bypass once nothing blocks).
 //!   - `lsp-over-grep-sweep` (warn, flint/v2): the undecidable bucket — recursive or
 //!     bare default-recursive searches whose target cannot be classified from the
 //!     command line. Non-blocking: the action proceeds, the agent is told, receipted.
-//!   - judge shadowing: when both match, critique wins (strongest tier).
+//!   - judge reporting: when both match, ONE verdict is reported — the deterministic
+//!     total order picks the smallest `(scope, rule_id)`, so the specific law speaks
+//!     and the generic sweep never doubles up.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -51,7 +54,8 @@ fn shipped_laws_parse_with_expected_tiers() {
         ParsedRule::Advisory(_) => panic!("lsp-over-grep is a gate rule"),
     };
     assert_eq!(lsp.rule.id, "lsp-over-grep");
-    assert_eq!(lsp.rule.response, Response::Critique);
+    assert_eq!(lsp.rule.response, Response::Warn, "the law recommends, it does not block");
+    assert_eq!(lsp.meta.schema, "flint/v2", "warn is v2-only vocabulary");
 
     let sweep = match parse_rule("rules/lsp-over-grep-sweep.md", SWEEP_LAW).expect("sweep law parses") {
         ParsedRule::Gate(cr) => cr,
@@ -62,10 +66,10 @@ fn shipped_laws_parse_with_expected_tiers() {
     assert_eq!(sweep.meta.schema, "flint/v2", "warn is v2-only vocabulary");
 }
 
-// ── critique: true positives the tightening must NOT lose ─────────────────────
+// ── warn: true positives the tightening must NOT lose ─────────────────────────
 
 #[test]
-fn code_greps_still_critique() {
+fn code_greps_still_speak() {
     for cmd in [
         // extension signal, tool at command start
         "grep -rn fold_veto crates/flint-core/src/touchstone.rs",
@@ -115,11 +119,11 @@ fn code_greps_still_critique() {
         "grep -- -r src/main.rs",
         "rg -- -foo src/main.rs",
     ] {
-        assert_eq!(verdict_tag(cmd), "critique", "must critique: {cmd}");
+        assert_eq!(verdict_tag(cmd), "warn", "must speak: {cmd}");
     }
 }
 
-// ── critique: the 2026-08-08 false-positive forms must affirm ─────────────────
+// ── the 2026-08-08 false-positive forms must affirm ───────────────────────────
 
 #[test]
 fn mentioning_a_grep_named_file_is_not_grepping() {
@@ -246,67 +250,38 @@ fn scoped_or_piped_searches_do_not_warn() {
 }
 
 #[test]
-fn critique_shadows_warn_when_both_match() {
-    // Both rules match, the strongest tier must win — the warn rule can never
-    // weaken the gate. Both fixtures carry a recursive flag (sweep) AND an explicit
-    // code-dir target (critique).
-    assert_eq!(verdict_tag("grep -rn foo src/"), "critique");
-    assert_eq!(verdict_tag("sudo grep -r foo src/"), "critique");
+fn both_laws_matching_report_the_min_id() {
+    // Both rules match a command carrying a recursive flag AND a visible code target.
+    // Judge reports ONE verdict and the deterministic total order picks the smallest
+    // (scope, rule_id) — the specific law speaks, the generic sweep never doubles up.
+    for cmd in ["grep -rn foo src/", "sudo grep -r foo src/"] {
+        let v = judge(&policy(), &bash(cmd));
+        assert!(v.is_warn(), "neither tier blocks any more: {cmd}");
+        match v {
+            Verdict::Warn { rule_id, .. } => assert_eq!(rule_id, "lsp-over-grep", "min id wins: {cmd}"),
+            other => panic!("expected a warn verdict for {cmd}, got {other:?}"),
+        }
+    }
 }
 
-// ── exempt: one declared-downgrade vocabulary for the whole family ────────────
+// ── the retired exempt arm stays retired ──────────────────────────────────────
 
 #[test]
-fn declared_bypass_suppresses_and_is_audited() {
+fn the_old_bypass_prefix_is_inert() {
+    // The family has no exempt arm: there is nothing to bypass once nothing blocks.
+    // The old variable survives only as an ordinary environment-assignment prefix, so
+    // the note still fires and no passage is receipted as an exempt downgrade.
     let p = policy();
-
-    let a = bash("FLINT_LSP_BYPASS=string-literal grep foo src/main.rs");
-    assert_eq!(judge(&p, &a), Verdict::Affirm, "declared downgrade suppresses the critique");
-    assert_eq!(exempted_rules(&p, &a), vec!["lsp-over-grep".to_string()]);
-
-    let b = bash("FLINT_LSP_BYPASS=big-text-sweep rg unwrap");
-    assert_eq!(judge(&p, &b), Verdict::Affirm, "declared downgrade suppresses the warn");
-    assert_eq!(exempted_rules(&p, &b), vec!["lsp-over-grep-sweep".to_string()]);
-
-    // a bare =1 stays dead (v4 contract: the value is a reason slug, 4+ chars)
-    let c = bash("FLINT_LSP_BYPASS=1 grep foo src/main.rs");
-    assert_eq!(judge(&p, &c).tag(), "critique", "bare =1 does not exempt");
-
-    // The exempt anchors must be AT LEAST as wide as the pattern anchors — the escape
-    // hatch must work everywhere the gate fires (codex probe: $() fired but did not
-    // exempt; the newline shape bit a live session on 2026-08-08).
-    let d = bash("echo $(FLINT_LSP_BYPASS=big-text-sweep rg unwrap)");
-    assert_eq!(judge(&p, &d), Verdict::Affirm, "a bypass inside $() must exempt");
-    assert_eq!(exempted_rules(&p, &d), vec!["lsp-over-grep-sweep".to_string()]);
-
-    let e = bash("true\nFLINT_LSP_BYPASS=stdout-filter grep foo src/main.rs");
-    assert_eq!(judge(&p, &e), Verdict::Affirm, "a bypass after a newline must exempt");
-    assert_eq!(exempted_rules(&p, &e), vec!["lsp-over-grep".to_string()]);
-}
-
-#[test]
-fn powershell_shaped_bypass_declares_the_downgrade_too() {
-    // The bash inline-assignment shape is unwritable in PowerShell — pwsh can only
-    // say $env:VAR="value"; as its own statement. A harness on Windows still sends
-    // one command text, so the declaration is visible to the matcher; without this
-    // shape the escape hatch needs Git Bash installed (Windows, 2026-08-08).
-    let p = policy();
-
-    let a = bash("$env:FLINT_LSP_BYPASS=\"stdout-filter\"; grep foo src/main.rs");
-    assert_eq!(judge(&p, &a), Verdict::Affirm, "quoted pwsh bypass must exempt");
-    assert_eq!(exempted_rules(&p, &a), vec!["lsp-over-grep".to_string()]);
-
-    let b = bash("$env:FLINT_LSP_BYPASS=big-text-sweep; rg unwrap");
-    assert_eq!(judge(&p, &b), Verdict::Affirm, "bare pwsh bypass must exempt");
-    assert_eq!(exempted_rules(&p, &b), vec!["lsp-over-grep-sweep".to_string()]);
-
-    // the reason-slug floor holds in the pwsh shape as well: a bare short value
-    // is not a declaration
-    let c = bash("$env:FLINT_LSP_BYPASS=\"1\"; grep foo src/main.rs");
-    assert_eq!(judge(&p, &c).tag(), "critique", "pwsh =1 does not exempt");
-
-    // the pwsh branch is anchored to a command boundary like the bash one — a
-    // COMMENTED declaration is text, not a declaration (codex round 5)
-    let d = bash("# $env:FLINT_LSP_BYPASS=example\nrg foo src/main.rs");
-    assert_eq!(judge(&p, &d).tag(), "critique", "a commented pwsh bypass must not exempt");
+    for cmd in [
+        "FLINT_LSP_BYPASS=string-literal grep foo src/main.rs",
+        "FLINT_LSP_OVER_GREP_BYPASS=string-literal grep foo src/main.rs",
+        "FLINT_LSP_BYPASS=big-text-sweep rg unwrap",
+        "$env:FLINT_LSP_BYPASS=\"stdout-filter\"; grep foo src/main.rs",
+        "echo $(FLINT_LSP_BYPASS=big-text-sweep rg unwrap)",
+        "true\nFLINT_LSP_BYPASS=stdout-filter grep foo src/main.rs",
+    ] {
+        let a = bash(cmd);
+        assert_eq!(judge(&p, &a).tag(), "warn", "the note still fires: {cmd}");
+        assert!(exempted_rules(&p, &a).is_empty(), "no exempt arm exists: {cmd}");
+    }
 }

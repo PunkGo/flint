@@ -93,21 +93,46 @@ fn init_key_is_0600_and_home_is_0700() {
 fn an_accepted_example_law_actually_enforces() {
     // The samples in examples/laws/ are the material the README points new users at —
     // copy one in exactly the way a user would, accept it, and prove it gates for real.
+    // The TIER is read from the sample rather than hardcoded: samples are data and may
+    // legitimately change tier (the LSP pair moved critique -> warn), while the property
+    // under test is that an accepted sample actually reaches the harness at the tier it
+    // declares.
     let h = Home::init(&[]);
     let cfg = h.config();
     let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/laws/lsp-over-grep.md");
     let dest = h.home.join("canon/rules/lsp-over-grep.md");
     fs::copy(&example, &dest).unwrap_or_else(|e| panic!("copy {}: {e}", example.display()));
+    let source = fs::read_to_string(&example).unwrap();
+    let response = match flint_core::canon::parse_rule("rules/lsp-over-grep.md", &source)
+        .unwrap_or_else(|e| panic!("sample must parse: {e}"))
+    {
+        flint_core::canon::ParsedRule::Gate(gate) => gate.rule.response,
+        flint_core::canon::ParsedRule::Advisory(_) => panic!("this sample must be a gate"),
+    };
     let (code, _o, e) = run(&["law", "accept", "--all", "--config", cfg.to_str().unwrap(), "--key", h.key().to_str().unwrap()]);
     assert_eq!(code, 0, "accept --all: {e}");
-    // The accepted lsp-over-grep law now blocks a grep on source.
+    // The accepted law now meets a grep on source — the shape its pattern targets.
     let hook = r#"{"tool_name":"Bash","tool_input":{"command":"grep -rn foo src/main.rs"}}"#;
     let (code, out) = run_stdin(&["hook", "--harness", "claude", "--config", cfg.to_str().unwrap(), "--mode", "block"], hook);
     assert_eq!(code, 0, "the exit code is not the blocking channel");
-    assert!(
-        out.contains("\"permissionDecision\":\"deny\"") && out.contains("flint critique"),
-        "an accepted example law must enforce, as a critique: {out}"
-    );
+    match response {
+        flint_core::touchstone::Response::Warn => {
+            assert!(out.contains("flint warn [lsp-over-grep]"), "an accepted warn sample must speak: {out}");
+            assert!(!out.contains("permissionDecision"), "a warn may never block: {out}");
+        }
+        flint_core::touchstone::Response::Critique => {
+            assert!(
+                out.contains("\"permissionDecision\":\"deny\"") && out.contains("flint critique"),
+                "an accepted critique sample must block: {out}"
+            );
+        }
+        flint_core::touchstone::Response::Deny => {
+            assert!(
+                out.contains("\"permissionDecision\":\"deny\"") && out.contains("sovereign freeze"),
+                "an accepted block sample must freeze: {out}"
+            );
+        }
+    }
 }
 
 #[test]
